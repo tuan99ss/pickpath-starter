@@ -289,6 +289,14 @@ names and is just missing `x`/`y`, the upload box in `dashboard.html` notices an
 to build a floor plan from two numbers: the distance between aisle centers, and the
 distance between bay centers, both in feet.
 
+**`locations_no_xy.csv` is included so you can try this without your own export.** Same
+200 slots as the main sample, alphanumeric aisle labels (`A01`, not `1`) so it exercises
+the same label-parsing your real export would need, no `x`/`y` columns, no `STAGING` row —
+the shape of a real WMS export. Drop it into Section 1 alongside the included
+`orders.csv`, enter `12` and `10`, and you have a real, computed result (not the same
+figure as the main sample — that one used a hand-placed staging point this file does not
+have, so the depot falls back to a corner and the numbers land close but not identical).
+
 This works when your aisles are evenly spaced and numbered in physical left-to-right
 order — the same assumption as pacing off one aisle and multiplying. Type the two
 numbers, click **Build floor plan**, and the map and every distance are computed from
@@ -368,7 +376,8 @@ instructions at the top, and answer the questions it asks you.
 | `pickpath_engine.js` | the same optimizer, ported to JavaScript so the upload box can run it |
 | `make_dashboard.py` | builds `dashboard.html`; imports the optimizer, repeats none of it |
 | `locations.csv` | synthetic location master: 200 pick slots across 10 aisles, plus staging |
-| `orders.csv` | synthetic pick orders: 20 orders, 5–25 lines each |
+| `locations_no_xy.csv` | the same 200 slots, no coordinates — demos the "Build floor plan" box |
+| `orders.csv` | synthetic pick orders: 20 orders, 5–25 lines each — used with either locations file |
 | `test_pick_path.py` | proves the Python distance model — run it, do not trust it |
 | `test_pickpath_engine.js` | proves the JavaScript engine agrees with the Python one |
 | `README.md` | this file |

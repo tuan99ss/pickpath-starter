@@ -267,5 +267,45 @@ try {
     totalDefault(midResults) <= totalDefault(results));
 }
 
+// --------------------------------------------------------------------------
+// 9. locations_no_xy.csv - the sample that exercises the browser's "Build
+//    floor plan" recovery path with a real file, not a hand-built test
+//    string. Same location_id/aisle/bay/level values as the real sample
+//    (so it joins against the SAME orders.csv unchanged), alphanumeric
+//    aisle labels ("A01") to exercise the tolerant parser too, and no x/y
+//    or STAGING row - the shape of a real WMS export. Not a hardcoded
+//    percentage (that would go stale the moment orders.csv changes) - just
+//    "does it complete, and does the class of result stay plausible."
+// --------------------------------------------------------------------------
+
+{
+  const noXyPath = path.join(HERE, "locations_no_xy.csv");
+  if (fs.existsSync(noXyPath)) {
+    const noXyText = fs.readFileSync(noXyPath, "utf8");
+    let coreRows, sampleResults;
+    try {
+      coreRows = engine.readLocationsCoreOnly(noXyText, "locations_no_xy.csv");
+      const derivedLocations = engine.locationsMapFrom(engine.deriveXY(coreRows, 12, 10));
+      const wh2 = engine.makeWarehouse(derivedLocations);
+      const orderIds = Array.from(orders.keys()).sort(engine.codePointCompare);
+      sampleResults = orderIds.map(id => engine.optimizeOrder(wh2, orders.get(id)));
+    } catch (e) {
+      check("locations_no_xy.csv runs through the recovery path cleanly", false, e.message);
+      sampleResults = null;
+    }
+    if (sampleResults) {
+      check("locations_no_xy.csv has an alphanumeric aisle label ('A01' -> 1)",
+        coreRows[0].aisle === 1, coreRows[0].aisle);
+      const totalWas = sampleResults.reduce((s, r) => s + r.baseline_distance, 0);
+      const totalNow = sampleResults.reduce((s, r) => s + r.optimized_distance, 0);
+      const pct = 100 * (totalWas - totalNow) / totalWas;
+      check("locations_no_xy.csv + orders.csv, recovered at 12ft/10ft, gives a plausible result",
+        pct > 20 && pct < 60, `${pct.toFixed(1)}%`);
+    }
+  } else {
+    console.log("SKIP  locations_no_xy.csv not found");
+  }
+}
+
 console.log(`\n${pass} passed, ${fail} failed`);
 process.exit(fail ? 1 : 0);
