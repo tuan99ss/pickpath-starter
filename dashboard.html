@@ -1,0 +1,1131 @@
+<!DOCTYPE html>
+<html lang="en"><head><meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Pick path results - Synthetic sample data</title>
+<style>
+:root{
+  --ground:#FAF9F7; --panel:#FFFFFF; --ink:#1A1D21; --ink-dim:#5C6169;
+  --ink-faint:#8A9099; --line:#DCD9D4; --line-soft:#EBE8E4;
+  --was:#C0483D; --now:#16697A; --rack:#EAE7E2; --rack-line:#D6D2CC; --alert:#B23A2E;
+  --mono:ui-monospace,"Cascadia Code","SF Mono",Menlo,Consolas,monospace;
+  --sans:ui-sans-serif,system-ui,-apple-system,"Segoe UI",sans-serif;
+}
+*{box-sizing:border-box}
+body{margin:0;background:var(--ground);color:var(--ink);font-family:var(--sans);
+  font-size:14px;line-height:1.5;-webkit-font-smoothing:antialiased}
+.wrap{max-width:1180px;margin:0 auto;padding:28px 24px 56px}
+.num{font-family:var(--mono);font-variant-numeric:tabular-nums}
+
+header{border-bottom:1px solid var(--line);padding-bottom:18px;margin-bottom:22px}
+h1{font-size:19px;margin:0 0 4px;letter-spacing:-0.01em}
+.sub{color:var(--ink-dim);font-size:13px;margin:0}
+.src{color:var(--ink-faint);font-size:11.5px;margin-top:9px;font-family:var(--mono)}
+.tag{display:inline-block;border:1px solid var(--line);border-radius:3px;
+  padding:2px 7px;font-size:11px;letter-spacing:.05em;text-transform:uppercase;
+  color:var(--ink-dim);background:var(--panel);margin-right:6px}
+
+.stats{display:grid;grid-template-columns:repeat(4,1fr);gap:1px;background:var(--line);
+  border:1px solid var(--line);border-radius:6px;overflow:hidden;margin-bottom:10px}
+.stat{background:var(--panel);padding:13px 15px}
+.stat .k{font-size:10.5px;letter-spacing:.07em;text-transform:uppercase;color:var(--ink-faint)}
+.stat .v{font-family:var(--mono);font-variant-numeric:tabular-nums;font-size:22px;
+  margin-top:3px;letter-spacing:-0.02em}
+.stat .u{font-size:12px;color:var(--ink-faint);margin-left:3px}
+.spread{color:var(--ink-dim);font-size:12.5px;margin:0 0 26px}
+
+.stack{display:flex;flex-direction:column;gap:22px}
+
+.panel{background:var(--panel);border:1px solid var(--line);border-radius:6px}
+.phead{display:flex;justify-content:space-between;align-items:baseline;gap:12px;
+  padding:12px 15px;border-bottom:1px solid var(--line-soft);flex-wrap:wrap}
+.phead h2{font-size:13px;margin:0;font-weight:600}
+.phead .note{font-size:11.5px;color:var(--ink-faint)}
+
+.toggle{display:flex;gap:0;border:1px solid var(--line);border-radius:4px;overflow:hidden}
+.toggle button{font-family:var(--sans);font-size:11.5px;padding:4px 10px;border:0;
+  background:var(--panel);color:var(--ink-dim);cursor:pointer;border-right:1px solid var(--line)}
+.toggle button:last-child{border-right:0}
+.toggle button[aria-pressed="true"]{background:var(--ink);color:#fff}
+
+svg.map{display:block;width:100%;height:auto}
+.rack{fill:var(--rack);stroke:var(--rack-line);stroke-width:1}
+.crossaisle{fill:#F2EFEA;stroke:none}
+.bandlabel{font-family:var(--mono);font-size:8.5px;fill:var(--ink-faint);letter-spacing:.08em}
+.aislelabel{font-family:var(--mono);font-size:10px;fill:var(--ink-faint)}
+.depot{fill:var(--ink);stroke:none}
+.depotlabel{font-family:var(--mono);font-size:9px;fill:var(--ink-dim);letter-spacing:.05em}
+
+.route{display:none}
+.route.on{display:block}
+polyline{fill:none;stroke-linejoin:round;stroke-linecap:round}
+polyline.was{stroke:var(--was);stroke-width:2.6;opacity:.62}
+polyline.now{stroke:var(--now);stroke-width:2.6}
+.stop circle{fill:var(--now);stroke:#fff;stroke-width:1.4}
+.stop text{font-family:var(--mono);font-size:8.5px;fill:#fff}
+#map[data-mode="was"] .now,#map[data-mode="was"] .stop{display:none}
+#map[data-mode="now"] .was{display:none}
+
+.legend{display:flex;gap:16px;padding:10px 15px;border-top:1px solid var(--line-soft);
+  font-size:12px;color:var(--ink-dim);flex-wrap:wrap}
+.legend i{display:inline-block;width:15px;height:2.6px;vertical-align:middle;margin-right:6px}
+.legend .sw{display:inline-block;width:12px;height:11px;background:var(--rack);
+  border:1px solid var(--rack-line);vertical-align:-1px;margin-right:6px}
+
+.tablewrap{overflow-x:auto}
+table{border-collapse:collapse;width:100%;font-size:12.5px}
+thead th{position:sticky;top:0;background:var(--panel);text-align:left;
+  border-bottom:1px solid var(--line);padding:8px 12px;font-size:10.5px;
+  letter-spacing:.06em;text-transform:uppercase;color:var(--ink-faint);
+  cursor:pointer;user-select:none;white-space:nowrap;font-weight:600}
+thead th:hover{color:var(--ink)}
+thead th[data-dir]{color:var(--ink)}
+thead th[data-dir="asc"]::after{content:" \2191"}
+thead th[data-dir="desc"]::after{content:" \2193"}
+thead th.r,td.r{text-align:right}
+tbody td{border-bottom:1px solid var(--line-soft);padding:7px 12px;white-space:nowrap}
+tbody td.num{font-family:var(--mono);font-variant-numeric:tabular-nums}
+tbody tr{cursor:pointer}
+tbody tr:hover td{background:#F6F4F1}
+tbody tr.sel td{background:#EEF4F5}
+tbody tr.sel td:first-child{box-shadow:inset 3px 0 0 var(--now)}
+td.seq{font-family:var(--mono);font-size:11px;color:var(--ink-faint);
+  max-width:280px;overflow:hidden;text-overflow:ellipsis}
+.pctcell{font-family:var(--mono);font-variant-numeric:tabular-nums;color:var(--now)}
+.minibar{display:inline-block;width:52px;height:6px;background:var(--line-soft);
+  border-radius:2px;overflow:hidden;vertical-align:middle;margin-right:7px}
+.minibar span{display:block;height:100%;background:var(--now)}
+.filter{display:flex;gap:9px;align-items:center;flex-wrap:wrap}
+.filter input{font-family:var(--mono);font-size:12px;padding:4px 9px;
+  border:1px solid var(--line);border-radius:4px;background:var(--ground);
+  color:var(--ink);width:150px}
+.filter input:focus{outline:none;border-color:var(--now)}
+.filter .cnt{font-family:var(--mono);font-size:11.5px;color:var(--ink-faint)}
+
+.caption{padding:11px 15px;border-top:1px solid var(--line-soft);font-size:12.5px;color:var(--ink-dim)}
+.caption b{color:var(--ink);font-weight:600}
+
+.upload{margin-bottom:22px}
+.uploadbody{padding:15px}
+.dropzone{display:block;border:1.5px dashed var(--line);border-radius:6px;padding:22px 18px;
+  text-align:center;cursor:pointer;transition:border-color .15s,background .15s}
+.dropzone:hover,.dropzone:focus-visible{border-color:var(--now);background:#F6FAFA;outline:none}
+.dropzone.drag{border-color:var(--now);background:#EEF6F7}
+.dz-icon{font-size:19px;color:var(--ink-faint);margin-bottom:4px}
+.dz-text{font-size:13.5px;color:var(--ink);font-weight:500}
+.dz-hint{font-size:11.5px;color:var(--ink-faint);margin-top:7px;font-family:var(--mono);line-height:1.6}
+.filestatus{display:flex;gap:16px;flex-wrap:wrap;margin-top:12px;font-size:12px;font-family:var(--mono)}
+.filestatus .slot{color:var(--ink-faint)}
+.filestatus .slot.ok{color:var(--now)}
+.filestatus .slot b{font-family:var(--sans);font-weight:600;color:var(--ink)}
+.errorbox{margin-top:12px;border:1px solid var(--alert);background:#FBEEEC;border-radius:6px;
+  padding:12px 14px;font-size:12.5px;color:var(--ink);line-height:1.55}
+.errorbox b{color:var(--alert)}
+.errorbox .cols{font-family:var(--mono);font-size:11.5px;color:var(--ink-dim);margin-top:6px;word-break:break-word}
+.errorbox .fix{margin-top:9px;padding-top:9px;border-top:1px solid #E8D5D2}
+#resetlink{color:var(--now);text-decoration:none;margin-left:4px}
+#resetlink:hover{text-decoration:underline}
+footer{margin-top:26px;border-top:1px solid var(--line);padding-top:16px;
+  font-size:12px;color:var(--ink-dim);max-width:760px}
+footer h3{font-size:12px;margin:0 0 6px;color:var(--ink)}
+footer li{margin-bottom:3px}
+</style></head>
+<body><div class="wrap">
+
+<header>
+  <h1>Every order travels further than it needs to. Here is how much further.</h1>
+  <p class="sub">Each pick order routed twice - once in the sequence the system issued,
+  once re-sequenced - measured with the same distance model.</p>
+  <p class="src"><span class="tag" id="tag">Synthetic sample data</span>
+  <span id="srcline">locations.csv · 200 slots ·
+  orders.csv · 20 orders · 325 lines ·
+  generated 05 Aug 2026, 13:31</span></p>
+</header>
+
+<div class="stats">
+  <div class="stat"><div class="k">Travelled as issued</div>
+    <div class="v"><span id="stat-was">18,588</span><span class="u">ft</span></div></div>
+  <div class="stat"><div class="k">Travelled optimized</div>
+    <div class="v"><span id="stat-now">11,680</span><span class="u">ft</span></div></div>
+  <div class="stat"><div class="k">Removed</div>
+    <div class="v"><span id="stat-removed">6,908</span><span class="u">ft</span></div></div>
+  <div class="stat"><div class="k">Improvement</div>
+    <div class="v"><span id="stat-improvement">37.2</span><span class="u">%</span></div></div>
+</div>
+<p class="spread" id="spreadline">Per order: best <span class="num">54.2%</span>,
+median <span class="num">35.5%</span>,
+worst <span class="num">8.0%</span>.
+<span class="num">1</span> of
+<span class="num">20</span> orders improve by less than 10% - those are already
+close to the shortest route.</p>
+
+<div class="panel upload">
+  <div class="phead">
+    <h2>Try it on your own data</h2>
+    <span class="note">free · runs in your browser · nothing is uploaded anywhere</span>
+  </div>
+  <div class="uploadbody">
+    <label class="dropzone" id="dropzone" tabindex="0">
+      <input type="file" id="fileInput" accept=".csv,text/csv" multiple hidden>
+      <div class="dz-icon">&#8679;</div>
+      <div class="dz-text">Drop your two CSV files here, or click to browse</div>
+      <div class="dz-hint">one file with location_id, aisle, bay, level, x, y ·
+      one file with order_id, line, location_id, sku, qty<br>
+      column names are matched automatically and case does not matter</div>
+    </label>
+    <div class="filestatus" id="filestatus"></div>
+    <div class="errorbox" id="errorbox" hidden></div>
+  </div>
+  <div class="caption">Currently showing: <b id="datasource">the synthetic sample data</b>.
+    <a href="#" id="resetlink" onclick="resetToSample(event)" hidden>Reset to sample data</a></div>
+</div>
+
+<div class="stack">
+  <div class="panel">
+    <div class="phead">
+      <h2>Floor map</h2>
+      <div class="toggle">
+        <button onclick="mode('both',this)" aria-pressed="true">Both</button>
+        <button onclick="mode('was',this)" aria-pressed="false">As issued</button>
+        <button onclick="mode('now',this)" aria-pressed="false">Optimized</button>
+      </div>
+    </div>
+    <svg id="map" class="map" data-mode="both"
+         viewBox="0 0 1080 830" role="img"
+         aria-label="Top-down warehouse map with both pick routes drawn">
+      <rect class="crossaisle" x="40.0" y="773.1" width="1000.0" height="33.8" rx="2"/>
+<text class="bandlabel" x="1040.0" y="768.1" text-anchor="end">FRONT CROSS-AISLE</text>
+<rect class="crossaisle" x="40.0" y="23.1" width="1000.0" height="33.8" rx="2"/>
+<text class="bandlabel" x="1040.0" y="18.1" text-anchor="end">BACK CROSS-AISLE</text>
+<rect class="rack" x="162.0" y="62.5" width="56.0" height="705.0" rx="2"/>
+<rect class="rack" x="262.0" y="62.5" width="56.0" height="705.0" rx="2"/>
+<rect class="rack" x="362.0" y="62.5" width="56.0" height="705.0" rx="2"/>
+<rect class="rack" x="462.0" y="62.5" width="56.0" height="705.0" rx="2"/>
+<rect class="rack" x="562.0" y="62.5" width="56.0" height="705.0" rx="2"/>
+<rect class="rack" x="662.0" y="62.5" width="56.0" height="705.0" rx="2"/>
+<rect class="rack" x="762.0" y="62.5" width="56.0" height="705.0" rx="2"/>
+<rect class="rack" x="862.0" y="62.5" width="56.0" height="705.0" rx="2"/>
+<rect class="rack" x="962.0" y="62.5" width="56.0" height="705.0" rx="2"/>
+<text class="aislelabel" x="140.0" y="810.0" text-anchor="middle">1</text>
+<text class="aislelabel" x="240.0" y="810.0" text-anchor="middle">2</text>
+<text class="aislelabel" x="340.0" y="810.0" text-anchor="middle">3</text>
+<text class="aislelabel" x="440.0" y="810.0" text-anchor="middle">4</text>
+<text class="aislelabel" x="540.0" y="810.0" text-anchor="middle">5</text>
+<text class="aislelabel" x="640.0" y="810.0" text-anchor="middle">6</text>
+<text class="aislelabel" x="740.0" y="810.0" text-anchor="middle">7</text>
+<text class="aislelabel" x="840.0" y="810.0" text-anchor="middle">8</text>
+<text class="aislelabel" x="940.0" y="810.0" text-anchor="middle">9</text>
+<text class="aislelabel" x="1040.0" y="810.0" text-anchor="middle">10</text>
+<rect class="depot" x="31.0" y="781.0" width="18" height="18" rx="3"/>
+<text class="depotlabel" x="40.0" y="816.0" text-anchor="middle">STAGING</text>
+      <g class="route" data-order="ORD-1001"><polyline class="was" points="40.0,790.0 40.0,790.0 140.0,790.0 140.0,790.0 140.0,290.0 140.0,290.0 140.0,290.0 140.0,123.3 140.0,40.0 240.0,40.0 240.0,623.3 240.0,373.3 240.0,790.0 640.0,790.0 640.0,540.0 640.0,40.0 740.0,40.0 740.0,206.7 740.0,40.0 940.0,40.0 940.0,456.7 940.0,790.0 340.0,790.0 340.0,456.7 340.0,790.0 240.0,790.0 240.0,540.0 240.0,790.0 140.0,790.0 140.0,540.0 140.0,790.0 40.0,790.0 40.0,790.0"/><polyline class="now" points="40.0,790.0 40.0,790.0 140.0,790.0 140.0,790.0 140.0,540.0 140.0,290.0 140.0,290.0 140.0,123.3 140.0,40.0 240.0,40.0 240.0,373.3 240.0,540.0 240.0,623.3 240.0,790.0 340.0,790.0 340.0,456.7 340.0,790.0 640.0,790.0 640.0,540.0 640.0,40.0 740.0,40.0 740.0,206.7 740.0,40.0 940.0,40.0 940.0,456.7 940.0,790.0 40.0,790.0 40.0,790.0"/><g class="stop"><title>A01-B01-L1 - stop 1</title><circle cx="140.0" cy="790.0" r="8.5"/><text x="140.0" y="793.1" text-anchor="middle">1</text></g><g class="stop"><title>A01-B04-L2 - stop 2</title><circle cx="140.0" cy="540.0" r="8.5"/><text x="140.0" y="543.1" text-anchor="middle">2</text></g><g class="stop"><title>A01-B07-L1 - stop 3</title><circle cx="140.0" cy="290.0" r="8.5"/><text x="140.0" y="293.1" text-anchor="middle">3</text></g><g class="stop"><title>A01-B07-L2 - stop 4</title><circle cx="140.0" cy="290.0" r="8.5"/><text x="140.0" y="293.1" text-anchor="middle">4</text></g><g class="stop"><title>A01-B09-L1 - stop 5</title><circle cx="140.0" cy="123.3" r="8.5"/><text x="140.0" y="126.4" text-anchor="middle">5</text></g><g class="stop"><title>A02-B06-L1 - stop 6</title><circle cx="240.0" cy="373.3" r="8.5"/><text x="240.0" y="376.4" text-anchor="middle">6</text></g><g class="stop"><title>A02-B04-L1 - stop 7</title><circle cx="240.0" cy="540.0" r="8.5"/><text x="240.0" y="543.1" text-anchor="middle">7</text></g><g class="stop"><title>A02-B03-L1 - stop 8</title><circle cx="240.0" cy="623.3" r="8.5"/><text x="240.0" y="626.4" text-anchor="middle">8</text></g><g class="stop"><title>A03-B05-L2 - stop 9</title><circle cx="340.0" cy="456.7" r="8.5"/><text x="340.0" y="459.8" text-anchor="middle">9</text></g><g class="stop"><title>A06-B04-L1 - stop 10</title><circle cx="640.0" cy="540.0" r="8.5"/><text x="640.0" y="543.1" text-anchor="middle">10</text></g><g class="stop"><title>A07-B08-L2 - stop 11</title><circle cx="740.0" cy="206.7" r="8.5"/><text x="740.0" y="209.8" text-anchor="middle">11</text></g><g class="stop"><title>A09-B05-L1 - stop 12</title><circle cx="940.0" cy="456.7" r="8.5"/><text x="940.0" y="459.8" text-anchor="middle">12</text></g></g><g class="route" data-order="ORD-1002"><polyline class="was" points="40.0,790.0 40.0,790.0 140.0,790.0 140.0,373.3 140.0,790.0 240.0,790.0 240.0,623.3 240.0,790.0 440.0,790.0 440.0,790.0 440.0,373.3 440.0,40.0 640.0,40.0 640.0,290.0 640.0,790.0 1040.0,790.0 1040.0,790.0 1040.0,623.3 1040.0,790.0 240.0,790.0 240.0,290.0 240.0,40.0 440.0,40.0 440.0,123.3 440.0,790.0 40.0,790.0 40.0,790.0"/><polyline class="now" points="40.0,790.0 40.0,790.0 140.0,790.0 140.0,373.3 140.0,40.0 240.0,40.0 240.0,290.0 240.0,623.3 240.0,790.0 440.0,790.0 440.0,790.0 440.0,373.3 440.0,123.3 440.0,40.0 640.0,40.0 640.0,290.0 640.0,790.0 1040.0,790.0 1040.0,790.0 1040.0,623.3 1040.0,790.0 40.0,790.0 40.0,790.0"/><g class="stop"><title>A01-B06-L1 - stop 1</title><circle cx="140.0" cy="373.3" r="8.5"/><text x="140.0" y="376.4" text-anchor="middle">1</text></g><g class="stop"><title>A02-B07-L2 - stop 2</title><circle cx="240.0" cy="290.0" r="8.5"/><text x="240.0" y="293.1" text-anchor="middle">2</text></g><g class="stop"><title>A02-B03-L2 - stop 3</title><circle cx="240.0" cy="623.3" r="8.5"/><text x="240.0" y="626.4" text-anchor="middle">3</text></g><g class="stop"><title>A04-B01-L2 - stop 4</title><circle cx="440.0" cy="790.0" r="8.5"/><text x="440.0" y="793.1" text-anchor="middle">4</text></g><g class="stop"><title>A04-B06-L2 - stop 5</title><circle cx="440.0" cy="373.3" r="8.5"/><text x="440.0" y="376.4" text-anchor="middle">5</text></g><g class="stop"><title>A04-B09-L2 - stop 6</title><circle cx="440.0" cy="123.3" r="8.5"/><text x="440.0" y="126.4" text-anchor="middle">6</text></g><g class="stop"><title>A06-B07-L2 - stop 7</title><circle cx="640.0" cy="290.0" r="8.5"/><text x="640.0" y="293.1" text-anchor="middle">7</text></g><g class="stop"><title>A10-B01-L1 - stop 8</title><circle cx="1040.0" cy="790.0" r="8.5"/><text x="1040.0" y="793.1" text-anchor="middle">8</text></g><g class="stop"><title>A10-B03-L2 - stop 9</title><circle cx="1040.0" cy="623.3" r="8.5"/><text x="1040.0" y="626.4" text-anchor="middle">9</text></g></g><g class="route" data-order="ORD-1003"><polyline class="was" points="40.0,790.0 40.0,790.0 340.0,790.0 340.0,456.7 340.0,40.0 340.0,790.0 440.0,790.0 440.0,790.0 440.0,790.0 440.0,623.3 440.0,623.3 440.0,540.0 440.0,373.3 440.0,373.3 440.0,290.0 440.0,206.7 440.0,123.3 440.0,123.3 440.0,40.0 440.0,40.0 540.0,40.0 540.0,290.0 540.0,40.0 640.0,40.0 640.0,290.0 640.0,790.0 1040.0,790.0 1040.0,790.0 1040.0,790.0 1040.0,40.0 1040.0,373.3 1040.0,790.0 440.0,790.0 440.0,540.0 440.0,790.0 940.0,790.0 940.0,623.3 940.0,790.0 1040.0,790.0 1040.0,456.7 1040.0,790.0 440.0,790.0 440.0,706.7 440.0,456.7 440.0,790.0 40.0,790.0 40.0,790.0"/><polyline class="now" points="40.0,790.0 40.0,790.0 340.0,790.0 340.0,456.7 340.0,790.0 440.0,790.0 440.0,790.0 440.0,790.0 440.0,706.7 440.0,623.3 440.0,623.3 440.0,540.0 440.0,540.0 440.0,456.7 440.0,373.3 440.0,373.3 440.0,290.0 440.0,206.7 440.0,123.3 440.0,123.3 440.0,40.0 440.0,40.0 340.0,40.0 340.0,40.0 340.0,40.0 540.0,40.0 540.0,290.0 540.0,40.0 640.0,40.0 640.0,290.0 640.0,40.0 1040.0,40.0 1040.0,40.0 1040.0,373.3 1040.0,456.7 1040.0,790.0 1040.0,790.0 940.0,790.0 940.0,623.3 940.0,790.0 40.0,790.0 40.0,790.0"/><g class="stop"><title>A03-B05-L1 - stop 1</title><circle cx="340.0" cy="456.7" r="8.5"/><text x="340.0" y="459.8" text-anchor="middle">1</text></g><g class="stop"><title>A04-B01-L1 - stop 2</title><circle cx="440.0" cy="790.0" r="8.5"/><text x="440.0" y="793.1" text-anchor="middle">2</text></g><g class="stop"><title>A04-B01-L2 - stop 3</title><circle cx="440.0" cy="790.0" r="8.5"/><text x="440.0" y="793.1" text-anchor="middle">3</text></g><g class="stop"><title>A04-B02-L1 - stop 4</title><circle cx="440.0" cy="706.7" r="8.5"/><text x="440.0" y="709.8" text-anchor="middle">4</text></g><g class="stop"><title>A04-B03-L1 - stop 5</title><circle cx="440.0" cy="623.3" r="8.5"/><text x="440.0" y="626.4" text-anchor="middle">5</text></g><g class="stop"><title>A04-B03-L2 - stop 6</title><circle cx="440.0" cy="623.3" r="8.5"/><text x="440.0" y="626.4" text-anchor="middle">6</text></g><g class="stop"><title>A04-B04-L1 - stop 7</title><circle cx="440.0" cy="540.0" r="8.5"/><text x="440.0" y="543.1" text-anchor="middle">7</text></g><g class="stop"><title>A04-B04-L2 - stop 8</title><circle cx="440.0" cy="540.0" r="8.5"/><text x="440.0" y="543.1" text-anchor="middle">8</text></g><g class="stop"><title>A04-B05-L2 - stop 9</title><circle cx="440.0" cy="456.7" r="8.5"/><text x="440.0" y="459.8" text-anchor="middle">9</text></g><g class="stop"><title>A04-B06-L1 - stop 10</title><circle cx="440.0" cy="373.3" r="8.5"/><text x="440.0" y="376.4" text-anchor="middle">10</text></g><g class="stop"><title>A04-B06-L2 - stop 11</title><circle cx="440.0" cy="373.3" r="8.5"/><text x="440.0" y="376.4" text-anchor="middle">11</text></g><g class="stop"><title>A04-B07-L1 - stop 12</title><circle cx="440.0" cy="290.0" r="8.5"/><text x="440.0" y="293.1" text-anchor="middle">12</text></g><g class="stop"><title>A04-B08-L2 - stop 13</title><circle cx="440.0" cy="206.7" r="8.5"/><text x="440.0" y="209.8" text-anchor="middle">13</text></g><g class="stop"><title>A04-B09-L1 - stop 14</title><circle cx="440.0" cy="123.3" r="8.5"/><text x="440.0" y="126.4" text-anchor="middle">14</text></g><g class="stop"><title>A04-B09-L2 - stop 15</title><circle cx="440.0" cy="123.3" r="8.5"/><text x="440.0" y="126.4" text-anchor="middle">15</text></g><g class="stop"><title>A04-B10-L1 - stop 16</title><circle cx="440.0" cy="40.0" r="8.5"/><text x="440.0" y="43.1" text-anchor="middle">16</text></g><g class="stop"><title>A03-B10-L1 - stop 17</title><circle cx="340.0" cy="40.0" r="8.5"/><text x="340.0" y="43.1" text-anchor="middle">17</text></g><g class="stop"><title>A05-B07-L2 - stop 18</title><circle cx="540.0" cy="290.0" r="8.5"/><text x="540.0" y="293.1" text-anchor="middle">18</text></g><g class="stop"><title>A06-B07-L2 - stop 19</title><circle cx="640.0" cy="290.0" r="8.5"/><text x="640.0" y="293.1" text-anchor="middle">19</text></g><g class="stop"><title>A10-B10-L1 - stop 20</title><circle cx="1040.0" cy="40.0" r="8.5"/><text x="1040.0" y="43.1" text-anchor="middle">20</text></g><g class="stop"><title>A10-B06-L1 - stop 21</title><circle cx="1040.0" cy="373.3" r="8.5"/><text x="1040.0" y="376.4" text-anchor="middle">21</text></g><g class="stop"><title>A10-B05-L2 - stop 22</title><circle cx="1040.0" cy="456.7" r="8.5"/><text x="1040.0" y="459.8" text-anchor="middle">22</text></g><g class="stop"><title>A10-B01-L1 - stop 23</title><circle cx="1040.0" cy="790.0" r="8.5"/><text x="1040.0" y="793.1" text-anchor="middle">23</text></g><g class="stop"><title>A09-B03-L1 - stop 24</title><circle cx="940.0" cy="623.3" r="8.5"/><text x="940.0" y="626.4" text-anchor="middle">24</text></g></g><g class="route" data-order="ORD-1004"><polyline class="was" points="40.0,790.0 40.0,790.0 140.0,790.0 140.0,373.3 140.0,790.0 340.0,790.0 340.0,623.3 340.0,373.3 340.0,40.0 340.0,40.0 340.0,790.0 440.0,790.0 440.0,790.0 440.0,706.7 440.0,456.7 440.0,123.3 440.0,123.3 440.0,40.0 440.0,40.0 440.0,40.0 640.0,40.0 640.0,290.0 640.0,790.0 1040.0,790.0 1040.0,790.0 1040.0,790.0 340.0,790.0 340.0,206.7 340.0,40.0 440.0,40.0 440.0,456.7 440.0,40.0 340.0,40.0 340.0,290.0 340.0,790.0 440.0,790.0 440.0,540.0 440.0,790.0 40.0,790.0 40.0,790.0"/><polyline class="now" points="40.0,790.0 40.0,790.0 140.0,790.0 140.0,373.3 140.0,40.0 340.0,40.0 340.0,40.0 340.0,40.0 340.0,206.7 340.0,290.0 340.0,373.3 340.0,623.3 340.0,790.0 440.0,790.0 440.0,790.0 440.0,706.7 440.0,540.0 440.0,456.7 440.0,456.7 440.0,123.3 440.0,123.3 440.0,40.0 440.0,40.0 640.0,40.0 640.0,290.0 640.0,790.0 1040.0,790.0 1040.0,790.0 1040.0,790.0 40.0,790.0 40.0,790.0"/><g class="stop"><title>A01-B06-L1 - stop 1</title><circle cx="140.0" cy="373.3" r="8.5"/><text x="140.0" y="376.4" text-anchor="middle">1</text></g><g class="stop"><title>A03-B10-L1 - stop 2</title><circle cx="340.0" cy="40.0" r="8.5"/><text x="340.0" y="43.1" text-anchor="middle">2</text></g><g class="stop"><title>A03-B10-L2 - stop 3</title><circle cx="340.0" cy="40.0" r="8.5"/><text x="340.0" y="43.1" text-anchor="middle">3</text></g><g class="stop"><title>A03-B08-L2 - stop 4</title><circle cx="340.0" cy="206.7" r="8.5"/><text x="340.0" y="209.8" text-anchor="middle">4</text></g><g class="stop"><title>A03-B07-L2 - stop 5</title><circle cx="340.0" cy="290.0" r="8.5"/><text x="340.0" y="293.1" text-anchor="middle">5</text></g><g class="stop"><title>A03-B06-L2 - stop 6</title><circle cx="340.0" cy="373.3" r="8.5"/><text x="340.0" y="376.4" text-anchor="middle">6</text></g><g class="stop"><title>A03-B03-L2 - stop 7</title><circle cx="340.0" cy="623.3" r="8.5"/><text x="340.0" y="626.4" text-anchor="middle">7</text></g><g class="stop"><title>A04-B01-L1 - stop 8</title><circle cx="440.0" cy="790.0" r="8.5"/><text x="440.0" y="793.1" text-anchor="middle">8</text></g><g class="stop"><title>A04-B02-L1 - stop 9</title><circle cx="440.0" cy="706.7" r="8.5"/><text x="440.0" y="709.8" text-anchor="middle">9</text></g><g class="stop"><title>A04-B04-L1 - stop 10</title><circle cx="440.0" cy="540.0" r="8.5"/><text x="440.0" y="543.1" text-anchor="middle">10</text></g><g class="stop"><title>A04-B05-L2 - stop 11</title><circle cx="440.0" cy="456.7" r="8.5"/><text x="440.0" y="459.8" text-anchor="middle">11</text></g><g class="stop"><title>A04-B05-L1 - stop 12</title><circle cx="440.0" cy="456.7" r="8.5"/><text x="440.0" y="459.8" text-anchor="middle">12</text></g><g class="stop"><title>A04-B09-L1 - stop 13</title><circle cx="440.0" cy="123.3" r="8.5"/><text x="440.0" y="126.4" text-anchor="middle">13</text></g><g class="stop"><title>A04-B09-L2 - stop 14</title><circle cx="440.0" cy="123.3" r="8.5"/><text x="440.0" y="126.4" text-anchor="middle">14</text></g><g class="stop"><title>A04-B10-L2 - stop 15</title><circle cx="440.0" cy="40.0" r="8.5"/><text x="440.0" y="43.1" text-anchor="middle">15</text></g><g class="stop"><title>A06-B07-L2 - stop 16</title><circle cx="640.0" cy="290.0" r="8.5"/><text x="640.0" y="293.1" text-anchor="middle">16</text></g><g class="stop"><title>A10-B01-L1 - stop 17</title><circle cx="1040.0" cy="790.0" r="8.5"/><text x="1040.0" y="793.1" text-anchor="middle">17</text></g></g><g class="route" data-order="ORD-1005"><polyline class="was" points="40.0,790.0 40.0,790.0 140.0,790.0 140.0,456.7 140.0,790.0 240.0,790.0 240.0,706.7 240.0,623.3 240.0,540.0 240.0,456.7 240.0,290.0 240.0,206.7 240.0,123.3 240.0,40.0 240.0,40.0 540.0,40.0 540.0,373.3 540.0,40.0 640.0,40.0 640.0,206.7 640.0,40.0 840.0,40.0 840.0,373.3 840.0,790.0 240.0,790.0 240.0,706.7 240.0,790.0 940.0,790.0 940.0,373.3 940.0,790.0 240.0,790.0 240.0,540.0 240.0,40.0 240.0,790.0 40.0,790.0 40.0,790.0"/><polyline class="now" points="40.0,790.0 40.0,790.0 140.0,790.0 140.0,456.7 140.0,790.0 240.0,790.0 240.0,706.7 240.0,706.7 240.0,623.3 240.0,540.0 240.0,540.0 240.0,456.7 240.0,290.0 240.0,206.7 240.0,123.3 240.0,40.0 240.0,40.0 240.0,40.0 540.0,40.0 540.0,373.3 540.0,40.0 640.0,40.0 640.0,206.7 640.0,40.0 840.0,40.0 840.0,373.3 840.0,40.0 940.0,40.0 940.0,373.3 940.0,790.0 40.0,790.0 40.0,790.0"/><g class="stop"><title>A01-B05-L2 - stop 1</title><circle cx="140.0" cy="456.7" r="8.5"/><text x="140.0" y="459.8" text-anchor="middle">1</text></g><g class="stop"><title>A02-B02-L1 - stop 2</title><circle cx="240.0" cy="706.7" r="8.5"/><text x="240.0" y="709.8" text-anchor="middle">2</text></g><g class="stop"><title>A02-B02-L2 - stop 3</title><circle cx="240.0" cy="706.7" r="8.5"/><text x="240.0" y="709.8" text-anchor="middle">3</text></g><g class="stop"><title>A02-B03-L2 - stop 4</title><circle cx="240.0" cy="623.3" r="8.5"/><text x="240.0" y="626.4" text-anchor="middle">4</text></g><g class="stop"><title>A02-B04-L2 - stop 5</title><circle cx="240.0" cy="540.0" r="8.5"/><text x="240.0" y="543.1" text-anchor="middle">5</text></g><g class="stop"><title>A02-B04-L1 - stop 6</title><circle cx="240.0" cy="540.0" r="8.5"/><text x="240.0" y="543.1" text-anchor="middle">6</text></g><g class="stop"><title>A02-B05-L2 - stop 7</title><circle cx="240.0" cy="456.7" r="8.5"/><text x="240.0" y="459.8" text-anchor="middle">7</text></g><g class="stop"><title>A02-B07-L2 - stop 8</title><circle cx="240.0" cy="290.0" r="8.5"/><text x="240.0" y="293.1" text-anchor="middle">8</text></g><g class="stop"><title>A02-B08-L1 - stop 9</title><circle cx="240.0" cy="206.7" r="8.5"/><text x="240.0" y="209.8" text-anchor="middle">9</text></g><g class="stop"><title>A02-B09-L2 - stop 10</title><circle cx="240.0" cy="123.3" r="8.5"/><text x="240.0" y="126.4" text-anchor="middle">10</text></g><g class="stop"><title>A02-B10-L2 - stop 11</title><circle cx="240.0" cy="40.0" r="8.5"/><text x="240.0" y="43.1" text-anchor="middle">11</text></g><g class="stop"><title>A02-B10-L1 - stop 12</title><circle cx="240.0" cy="40.0" r="8.5"/><text x="240.0" y="43.1" text-anchor="middle">12</text></g><g class="stop"><title>A05-B06-L2 - stop 13</title><circle cx="540.0" cy="373.3" r="8.5"/><text x="540.0" y="376.4" text-anchor="middle">13</text></g><g class="stop"><title>A06-B08-L1 - stop 14</title><circle cx="640.0" cy="206.7" r="8.5"/><text x="640.0" y="209.8" text-anchor="middle">14</text></g><g class="stop"><title>A08-B06-L1 - stop 15</title><circle cx="840.0" cy="373.3" r="8.5"/><text x="840.0" y="376.4" text-anchor="middle">15</text></g><g class="stop"><title>A09-B06-L2 - stop 16</title><circle cx="940.0" cy="373.3" r="8.5"/><text x="940.0" y="376.4" text-anchor="middle">16</text></g></g><g class="route" data-order="ORD-1006"><polyline class="was" points="40.0,790.0 40.0,790.0 240.0,790.0 240.0,706.7 240.0,706.7 240.0,623.3 240.0,540.0 240.0,290.0 240.0,290.0 240.0,206.7 240.0,40.0 240.0,40.0 340.0,40.0 340.0,706.7 340.0,790.0 740.0,790.0 740.0,540.0 740.0,123.3 740.0,40.0 940.0,40.0 940.0,623.3 940.0,373.3 940.0,40.0 940.0,40.0 1040.0,40.0 1040.0,623.3 1040.0,790.0 240.0,790.0 240.0,456.7 240.0,790.0 340.0,790.0 340.0,373.3 340.0,40.0 940.0,40.0 940.0,40.0 940.0,790.0 240.0,790.0 240.0,790.0 240.0,790.0 940.0,790.0 940.0,540.0 940.0,790.0 40.0,790.0 40.0,790.0"/><polyline class="now" points="40.0,790.0 40.0,790.0 240.0,790.0 240.0,790.0 240.0,706.7 240.0,706.7 240.0,623.3 240.0,540.0 240.0,456.7 240.0,290.0 240.0,290.0 240.0,206.7 240.0,40.0 240.0,40.0 340.0,40.0 340.0,373.3 340.0,706.7 340.0,790.0 740.0,790.0 740.0,540.0 740.0,123.3 740.0,40.0 940.0,40.0 940.0,40.0 940.0,40.0 940.0,373.3 940.0,540.0 940.0,623.3 940.0,790.0 1040.0,790.0 1040.0,623.3 1040.0,790.0 40.0,790.0 40.0,790.0"/><g class="stop"><title>A02-B01-L2 - stop 1</title><circle cx="240.0" cy="790.0" r="8.5"/><text x="240.0" y="793.1" text-anchor="middle">1</text></g><g class="stop"><title>A02-B02-L1 - stop 2</title><circle cx="240.0" cy="706.7" r="8.5"/><text x="240.0" y="709.8" text-anchor="middle">2</text></g><g class="stop"><title>A02-B02-L2 - stop 3</title><circle cx="240.0" cy="706.7" r="8.5"/><text x="240.0" y="709.8" text-anchor="middle">3</text></g><g class="stop"><title>A02-B03-L2 - stop 4</title><circle cx="240.0" cy="623.3" r="8.5"/><text x="240.0" y="626.4" text-anchor="middle">4</text></g><g class="stop"><title>A02-B04-L2 - stop 5</title><circle cx="240.0" cy="540.0" r="8.5"/><text x="240.0" y="543.1" text-anchor="middle">5</text></g><g class="stop"><title>A02-B05-L2 - stop 6</title><circle cx="240.0" cy="456.7" r="8.5"/><text x="240.0" y="459.8" text-anchor="middle">6</text></g><g class="stop"><title>A02-B07-L1 - stop 7</title><circle cx="240.0" cy="290.0" r="8.5"/><text x="240.0" y="293.1" text-anchor="middle">7</text></g><g class="stop"><title>A02-B07-L2 - stop 8</title><circle cx="240.0" cy="290.0" r="8.5"/><text x="240.0" y="293.1" text-anchor="middle">8</text></g><g class="stop"><title>A02-B08-L1 - stop 9</title><circle cx="240.0" cy="206.7" r="8.5"/><text x="240.0" y="209.8" text-anchor="middle">9</text></g><g class="stop"><title>A02-B10-L1 - stop 10</title><circle cx="240.0" cy="40.0" r="8.5"/><text x="240.0" y="43.1" text-anchor="middle">10</text></g><g class="stop"><title>A03-B06-L2 - stop 11</title><circle cx="340.0" cy="373.3" r="8.5"/><text x="340.0" y="376.4" text-anchor="middle">11</text></g><g class="stop"><title>A03-B02-L1 - stop 12</title><circle cx="340.0" cy="706.7" r="8.5"/><text x="340.0" y="709.8" text-anchor="middle">12</text></g><g class="stop"><title>A07-B04-L2 - stop 13</title><circle cx="740.0" cy="540.0" r="8.5"/><text x="740.0" y="543.1" text-anchor="middle">13</text></g><g class="stop"><title>A07-B09-L2 - stop 14</title><circle cx="740.0" cy="123.3" r="8.5"/><text x="740.0" y="126.4" text-anchor="middle">14</text></g><g class="stop"><title>A09-B10-L1 - stop 15</title><circle cx="940.0" cy="40.0" r="8.5"/><text x="940.0" y="43.1" text-anchor="middle">15</text></g><g class="stop"><title>A09-B10-L2 - stop 16</title><circle cx="940.0" cy="40.0" r="8.5"/><text x="940.0" y="43.1" text-anchor="middle">16</text></g><g class="stop"><title>A09-B06-L2 - stop 17</title><circle cx="940.0" cy="373.3" r="8.5"/><text x="940.0" y="376.4" text-anchor="middle">17</text></g><g class="stop"><title>A09-B04-L1 - stop 18</title><circle cx="940.0" cy="540.0" r="8.5"/><text x="940.0" y="543.1" text-anchor="middle">18</text></g><g class="stop"><title>A09-B03-L1 - stop 19</title><circle cx="940.0" cy="623.3" r="8.5"/><text x="940.0" y="626.4" text-anchor="middle">19</text></g><g class="stop"><title>A10-B03-L2 - stop 20</title><circle cx="1040.0" cy="623.3" r="8.5"/><text x="1040.0" y="626.4" text-anchor="middle">20</text></g></g><g class="route" data-order="ORD-1007"><polyline class="was" points="40.0,790.0 40.0,790.0 140.0,790.0 140.0,540.0 140.0,456.7 140.0,206.7 140.0,790.0 240.0,790.0 240.0,790.0 240.0,540.0 240.0,456.7 240.0,456.7 240.0,373.3 240.0,290.0 240.0,206.7 240.0,123.3 240.0,40.0 240.0,40.0 240.0,40.0 740.0,40.0 740.0,206.7 740.0,40.0 840.0,40.0 840.0,290.0 840.0,790.0 940.0,790.0 940.0,623.3 940.0,540.0 940.0,790.0 1040.0,790.0 1040.0,623.3 1040.0,373.3 1040.0,790.0 240.0,790.0 240.0,790.0 240.0,706.7 240.0,623.3 240.0,290.0 240.0,290.0 240.0,790.0 140.0,790.0 140.0,540.0 140.0,790.0 40.0,790.0 40.0,790.0"/><polyline class="now" points="40.0,790.0 40.0,790.0 140.0,790.0 140.0,540.0 140.0,540.0 140.0,456.7 140.0,206.7 140.0,40.0 240.0,40.0 240.0,40.0 240.0,40.0 240.0,123.3 240.0,206.7 240.0,290.0 240.0,373.3 240.0,456.7 240.0,456.7 240.0,540.0 240.0,623.3 240.0,706.7 240.0,790.0 240.0,790.0 240.0,790.0 940.0,790.0 940.0,540.0 940.0,623.3 940.0,790.0 1040.0,790.0 1040.0,623.3 1040.0,373.3 1040.0,40.0 840.0,40.0 840.0,290.0 840.0,40.0 740.0,40.0 740.0,206.7 740.0,790.0 40.0,790.0 40.0,790.0"/><g class="stop"><title>A01-B04-L2 - stop 1</title><circle cx="140.0" cy="540.0" r="8.5"/><text x="140.0" y="543.1" text-anchor="middle">1</text></g><g class="stop"><title>A01-B04-L1 - stop 2</title><circle cx="140.0" cy="540.0" r="8.5"/><text x="140.0" y="543.1" text-anchor="middle">2</text></g><g class="stop"><title>A01-B05-L2 - stop 3</title><circle cx="140.0" cy="456.7" r="8.5"/><text x="140.0" y="459.8" text-anchor="middle">3</text></g><g class="stop"><title>A01-B08-L1 - stop 4</title><circle cx="140.0" cy="206.7" r="8.5"/><text x="140.0" y="209.8" text-anchor="middle">4</text></g><g class="stop"><title>A02-B10-L1 - stop 5</title><circle cx="240.0" cy="40.0" r="8.5"/><text x="240.0" y="43.1" text-anchor="middle">5</text></g><g class="stop"><title>A02-B10-L2 - stop 6</title><circle cx="240.0" cy="40.0" r="8.5"/><text x="240.0" y="43.1" text-anchor="middle">6</text></g><g class="stop"><title>A02-B09-L2 - stop 7</title><circle cx="240.0" cy="123.3" r="8.5"/><text x="240.0" y="126.4" text-anchor="middle">7</text></g><g class="stop"><title>A02-B08-L1 - stop 8</title><circle cx="240.0" cy="206.7" r="8.5"/><text x="240.0" y="209.8" text-anchor="middle">8</text></g><g class="stop"><title>A02-B07-L2 - stop 9</title><circle cx="240.0" cy="290.0" r="8.5"/><text x="240.0" y="293.1" text-anchor="middle">9</text></g><g class="stop"><title>A02-B06-L1 - stop 10</title><circle cx="240.0" cy="373.3" r="8.5"/><text x="240.0" y="376.4" text-anchor="middle">10</text></g><g class="stop"><title>A02-B05-L1 - stop 11</title><circle cx="240.0" cy="456.7" r="8.5"/><text x="240.0" y="459.8" text-anchor="middle">11</text></g><g class="stop"><title>A02-B05-L2 - stop 12</title><circle cx="240.0" cy="456.7" r="8.5"/><text x="240.0" y="459.8" text-anchor="middle">12</text></g><g class="stop"><title>A02-B04-L2 - stop 13</title><circle cx="240.0" cy="540.0" r="8.5"/><text x="240.0" y="543.1" text-anchor="middle">13</text></g><g class="stop"><title>A02-B03-L2 - stop 14</title><circle cx="240.0" cy="623.3" r="8.5"/><text x="240.0" y="626.4" text-anchor="middle">14</text></g><g class="stop"><title>A02-B02-L2 - stop 15</title><circle cx="240.0" cy="706.7" r="8.5"/><text x="240.0" y="709.8" text-anchor="middle">15</text></g><g class="stop"><title>A02-B01-L1 - stop 16</title><circle cx="240.0" cy="790.0" r="8.5"/><text x="240.0" y="793.1" text-anchor="middle">16</text></g><g class="stop"><title>A02-B01-L2 - stop 17</title><circle cx="240.0" cy="790.0" r="8.5"/><text x="240.0" y="793.1" text-anchor="middle">17</text></g><g class="stop"><title>A09-B04-L1 - stop 18</title><circle cx="940.0" cy="540.0" r="8.5"/><text x="940.0" y="543.1" text-anchor="middle">18</text></g><g class="stop"><title>A09-B03-L1 - stop 19</title><circle cx="940.0" cy="623.3" r="8.5"/><text x="940.0" y="626.4" text-anchor="middle">19</text></g><g class="stop"><title>A10-B03-L2 - stop 20</title><circle cx="1040.0" cy="623.3" r="8.5"/><text x="1040.0" y="626.4" text-anchor="middle">20</text></g><g class="stop"><title>A10-B06-L2 - stop 21</title><circle cx="1040.0" cy="373.3" r="8.5"/><text x="1040.0" y="376.4" text-anchor="middle">21</text></g><g class="stop"><title>A08-B07-L2 - stop 22</title><circle cx="840.0" cy="290.0" r="8.5"/><text x="840.0" y="293.1" text-anchor="middle">22</text></g><g class="stop"><title>A07-B08-L2 - stop 23</title><circle cx="740.0" cy="206.7" r="8.5"/><text x="740.0" y="209.8" text-anchor="middle">23</text></g></g><g class="route" data-order="ORD-1008"><polyline class="was" points="40.0,790.0 40.0,790.0 340.0,790.0 340.0,790.0 340.0,623.3 340.0,540.0 340.0,540.0 340.0,456.7 340.0,290.0 340.0,290.0 340.0,206.7 340.0,206.7 340.0,123.3 340.0,40.0 340.0,40.0 740.0,40.0 740.0,290.0 740.0,40.0 940.0,40.0 940.0,206.7 940.0,40.0 1040.0,40.0 1040.0,373.3 1040.0,790.0 340.0,790.0 340.0,706.7 340.0,623.3 340.0,40.0 940.0,40.0 940.0,40.0 940.0,290.0 940.0,790.0 40.0,790.0 40.0,790.0"/><polyline class="now" points="40.0,790.0 40.0,790.0 340.0,790.0 340.0,790.0 340.0,706.7 340.0,623.3 340.0,623.3 340.0,540.0 340.0,540.0 340.0,456.7 340.0,290.0 340.0,290.0 340.0,206.7 340.0,206.7 340.0,123.3 340.0,40.0 340.0,40.0 740.0,40.0 740.0,290.0 740.0,40.0 940.0,40.0 940.0,290.0 940.0,206.7 940.0,40.0 940.0,40.0 1040.0,40.0 1040.0,373.3 1040.0,790.0 40.0,790.0 40.0,790.0"/><g class="stop"><title>A03-B01-L2 - stop 1</title><circle cx="340.0" cy="790.0" r="8.5"/><text x="340.0" y="793.1" text-anchor="middle">1</text></g><g class="stop"><title>A03-B02-L1 - stop 2</title><circle cx="340.0" cy="706.7" r="8.5"/><text x="340.0" y="709.8" text-anchor="middle">2</text></g><g class="stop"><title>A03-B03-L2 - stop 3</title><circle cx="340.0" cy="623.3" r="8.5"/><text x="340.0" y="626.4" text-anchor="middle">3</text></g><g class="stop"><title>A03-B03-L1 - stop 4</title><circle cx="340.0" cy="623.3" r="8.5"/><text x="340.0" y="626.4" text-anchor="middle">4</text></g><g class="stop"><title>A03-B04-L1 - stop 5</title><circle cx="340.0" cy="540.0" r="8.5"/><text x="340.0" y="543.1" text-anchor="middle">5</text></g><g class="stop"><title>A03-B04-L2 - stop 6</title><circle cx="340.0" cy="540.0" r="8.5"/><text x="340.0" y="543.1" text-anchor="middle">6</text></g><g class="stop"><title>A03-B05-L1 - stop 7</title><circle cx="340.0" cy="456.7" r="8.5"/><text x="340.0" y="459.8" text-anchor="middle">7</text></g><g class="stop"><title>A03-B07-L1 - stop 8</title><circle cx="340.0" cy="290.0" r="8.5"/><text x="340.0" y="293.1" text-anchor="middle">8</text></g><g class="stop"><title>A03-B07-L2 - stop 9</title><circle cx="340.0" cy="290.0" r="8.5"/><text x="340.0" y="293.1" text-anchor="middle">9</text></g><g class="stop"><title>A03-B08-L1 - stop 10</title><circle cx="340.0" cy="206.7" r="8.5"/><text x="340.0" y="209.8" text-anchor="middle">10</text></g><g class="stop"><title>A03-B08-L2 - stop 11</title><circle cx="340.0" cy="206.7" r="8.5"/><text x="340.0" y="209.8" text-anchor="middle">11</text></g><g class="stop"><title>A03-B09-L1 - stop 12</title><circle cx="340.0" cy="123.3" r="8.5"/><text x="340.0" y="126.4" text-anchor="middle">12</text></g><g class="stop"><title>A03-B10-L2 - stop 13</title><circle cx="340.0" cy="40.0" r="8.5"/><text x="340.0" y="43.1" text-anchor="middle">13</text></g><g class="stop"><title>A07-B07-L1 - stop 14</title><circle cx="740.0" cy="290.0" r="8.5"/><text x="740.0" y="293.1" text-anchor="middle">14</text></g><g class="stop"><title>A09-B07-L1 - stop 15</title><circle cx="940.0" cy="290.0" r="8.5"/><text x="940.0" y="293.1" text-anchor="middle">15</text></g><g class="stop"><title>A09-B08-L1 - stop 16</title><circle cx="940.0" cy="206.7" r="8.5"/><text x="940.0" y="209.8" text-anchor="middle">16</text></g><g class="stop"><title>A09-B10-L2 - stop 17</title><circle cx="940.0" cy="40.0" r="8.5"/><text x="940.0" y="43.1" text-anchor="middle">17</text></g><g class="stop"><title>A10-B06-L2 - stop 18</title><circle cx="1040.0" cy="373.3" r="8.5"/><text x="1040.0" y="376.4" text-anchor="middle">18</text></g></g><g class="route" data-order="ORD-1009"><polyline class="was" points="40.0,790.0 40.0,790.0 440.0,790.0 440.0,623.3 440.0,540.0 440.0,40.0 440.0,40.0 440.0,790.0 640.0,790.0 640.0,790.0 640.0,790.0 840.0,790.0 840.0,706.7 840.0,623.3 840.0,540.0 840.0,290.0 840.0,290.0 840.0,123.3 840.0,123.3 840.0,40.0 840.0,40.0 940.0,40.0 940.0,290.0 940.0,40.0 840.0,40.0 840.0,456.7 840.0,206.7 840.0,40.0 440.0,40.0 440.0,456.7 440.0,40.0 840.0,40.0 840.0,40.0 840.0,790.0 840.0,790.0 40.0,790.0 40.0,790.0"/><polyline class="now" points="40.0,790.0 40.0,790.0 440.0,790.0 440.0,623.3 440.0,540.0 440.0,456.7 440.0,40.0 440.0,40.0 440.0,40.0 840.0,40.0 840.0,40.0 840.0,40.0 840.0,123.3 840.0,206.7 840.0,290.0 840.0,290.0 840.0,456.7 840.0,540.0 840.0,623.3 840.0,706.7 840.0,790.0 840.0,790.0 940.0,790.0 940.0,290.0 940.0,790.0 640.0,790.0 640.0,790.0 640.0,790.0 40.0,790.0 40.0,790.0"/><g class="stop"><title>A04-B03-L1 - stop 1</title><circle cx="440.0" cy="623.3" r="8.5"/><text x="440.0" y="626.4" text-anchor="middle">1</text></g><g class="stop"><title>A04-B04-L1 - stop 2</title><circle cx="440.0" cy="540.0" r="8.5"/><text x="440.0" y="543.1" text-anchor="middle">2</text></g><g class="stop"><title>A04-B05-L1 - stop 3</title><circle cx="440.0" cy="456.7" r="8.5"/><text x="440.0" y="459.8" text-anchor="middle">3</text></g><g class="stop"><title>A04-B10-L1 - stop 4</title><circle cx="440.0" cy="40.0" r="8.5"/><text x="440.0" y="43.1" text-anchor="middle">4</text></g><g class="stop"><title>A04-B10-L2 - stop 5</title><circle cx="440.0" cy="40.0" r="8.5"/><text x="440.0" y="43.1" text-anchor="middle">5</text></g><g class="stop"><title>A08-B10-L1 - stop 6</title><circle cx="840.0" cy="40.0" r="8.5"/><text x="840.0" y="43.1" text-anchor="middle">6</text></g><g class="stop"><title>A08-B10-L2 - stop 7</title><circle cx="840.0" cy="40.0" r="8.5"/><text x="840.0" y="43.1" text-anchor="middle">7</text></g><g class="stop"><title>A08-B09-L2 - stop 8</title><circle cx="840.0" cy="123.3" r="8.5"/><text x="840.0" y="126.4" text-anchor="middle">8</text></g><g class="stop"><title>A08-B08-L2 - stop 9</title><circle cx="840.0" cy="206.7" r="8.5"/><text x="840.0" y="209.8" text-anchor="middle">9</text></g><g class="stop"><title>A08-B07-L2 - stop 10</title><circle cx="840.0" cy="290.0" r="8.5"/><text x="840.0" y="293.1" text-anchor="middle">10</text></g><g class="stop"><title>A08-B07-L1 - stop 11</title><circle cx="840.0" cy="290.0" r="8.5"/><text x="840.0" y="293.1" text-anchor="middle">11</text></g><g class="stop"><title>A08-B05-L1 - stop 12</title><circle cx="840.0" cy="456.7" r="8.5"/><text x="840.0" y="459.8" text-anchor="middle">12</text></g><g class="stop"><title>A08-B04-L1 - stop 13</title><circle cx="840.0" cy="540.0" r="8.5"/><text x="840.0" y="543.1" text-anchor="middle">13</text></g><g class="stop"><title>A08-B03-L1 - stop 14</title><circle cx="840.0" cy="623.3" r="8.5"/><text x="840.0" y="626.4" text-anchor="middle">14</text></g><g class="stop"><title>A08-B02-L1 - stop 15</title><circle cx="840.0" cy="706.7" r="8.5"/><text x="840.0" y="709.8" text-anchor="middle">15</text></g><g class="stop"><title>A08-B01-L2 - stop 16</title><circle cx="840.0" cy="790.0" r="8.5"/><text x="840.0" y="793.1" text-anchor="middle">16</text></g><g class="stop"><title>A09-B07-L1 - stop 17</title><circle cx="940.0" cy="290.0" r="8.5"/><text x="940.0" y="293.1" text-anchor="middle">17</text></g><g class="stop"><title>A06-B01-L2 - stop 18</title><circle cx="640.0" cy="790.0" r="8.5"/><text x="640.0" y="793.1" text-anchor="middle">18</text></g></g><g class="route" data-order="ORD-1010"><polyline class="was" points="40.0,790.0 40.0,790.0 140.0,790.0 140.0,540.0 140.0,540.0 140.0,290.0 140.0,790.0 540.0,790.0 540.0,706.7 540.0,373.3 540.0,290.0 540.0,206.7 540.0,40.0 840.0,40.0 840.0,290.0 840.0,40.0 540.0,40.0 540.0,456.7 540.0,373.3 540.0,790.0 40.0,790.0 40.0,790.0"/><polyline class="now" points="40.0,790.0 40.0,790.0 140.0,790.0 140.0,540.0 140.0,540.0 140.0,290.0 140.0,40.0 540.0,40.0 540.0,206.7 540.0,290.0 540.0,373.3 540.0,373.3 540.0,456.7 540.0,706.7 540.0,790.0 840.0,790.0 840.0,290.0 840.0,790.0 40.0,790.0 40.0,790.0"/><g class="stop"><title>A01-B04-L1 - stop 1</title><circle cx="140.0" cy="540.0" r="8.5"/><text x="140.0" y="543.1" text-anchor="middle">1</text></g><g class="stop"><title>A01-B04-L2 - stop 2</title><circle cx="140.0" cy="540.0" r="8.5"/><text x="140.0" y="543.1" text-anchor="middle">2</text></g><g class="stop"><title>A01-B07-L1 - stop 3</title><circle cx="140.0" cy="290.0" r="8.5"/><text x="140.0" y="293.1" text-anchor="middle">3</text></g><g class="stop"><title>A05-B08-L1 - stop 4</title><circle cx="540.0" cy="206.7" r="8.5"/><text x="540.0" y="209.8" text-anchor="middle">4</text></g><g class="stop"><title>A05-B07-L1 - stop 5</title><circle cx="540.0" cy="290.0" r="8.5"/><text x="540.0" y="293.1" text-anchor="middle">5</text></g><g class="stop"><title>A05-B06-L1 - stop 6</title><circle cx="540.0" cy="373.3" r="8.5"/><text x="540.0" y="376.4" text-anchor="middle">6</text></g><g class="stop"><title>A05-B06-L2 - stop 7</title><circle cx="540.0" cy="373.3" r="8.5"/><text x="540.0" y="376.4" text-anchor="middle">7</text></g><g class="stop"><title>A05-B05-L2 - stop 8</title><circle cx="540.0" cy="456.7" r="8.5"/><text x="540.0" y="459.8" text-anchor="middle">8</text></g><g class="stop"><title>A05-B02-L1 - stop 9</title><circle cx="540.0" cy="706.7" r="8.5"/><text x="540.0" y="709.8" text-anchor="middle">9</text></g><g class="stop"><title>A08-B07-L1 - stop 10</title><circle cx="840.0" cy="290.0" r="8.5"/><text x="840.0" y="293.1" text-anchor="middle">10</text></g></g><g class="route" data-order="ORD-1011"><polyline class="was" points="40.0,790.0 40.0,790.0 140.0,790.0 140.0,290.0 140.0,40.0 940.0,40.0 940.0,456.7 940.0,206.7 940.0,123.3 940.0,123.3 940.0,790.0 40.0,790.0 40.0,790.0"/><polyline class="now" points="40.0,790.0 40.0,790.0 140.0,790.0 140.0,290.0 140.0,40.0 940.0,40.0 940.0,123.3 940.0,123.3 940.0,206.7 940.0,456.7 940.0,790.0 40.0,790.0 40.0,790.0"/><g class="stop"><title>A01-B07-L2 - stop 1</title><circle cx="140.0" cy="290.0" r="8.5"/><text x="140.0" y="293.1" text-anchor="middle">1</text></g><g class="stop"><title>A09-B09-L1 - stop 2</title><circle cx="940.0" cy="123.3" r="8.5"/><text x="940.0" y="126.4" text-anchor="middle">2</text></g><g class="stop"><title>A09-B09-L2 - stop 3</title><circle cx="940.0" cy="123.3" r="8.5"/><text x="940.0" y="126.4" text-anchor="middle">3</text></g><g class="stop"><title>A09-B08-L2 - stop 4</title><circle cx="940.0" cy="206.7" r="8.5"/><text x="940.0" y="209.8" text-anchor="middle">4</text></g><g class="stop"><title>A09-B05-L2 - stop 5</title><circle cx="940.0" cy="456.7" r="8.5"/><text x="940.0" y="459.8" text-anchor="middle">5</text></g></g><g class="route" data-order="ORD-1012"><polyline class="was" points="40.0,790.0 40.0,790.0 840.0,790.0 840.0,40.0 840.0,790.0 940.0,790.0 940.0,790.0 940.0,456.7 940.0,206.7 940.0,206.7 940.0,790.0 940.0,790.0 40.0,790.0 40.0,790.0"/><polyline class="now" points="40.0,790.0 40.0,790.0 840.0,790.0 840.0,40.0 840.0,40.0 940.0,40.0 940.0,206.7 940.0,206.7 940.0,456.7 940.0,790.0 940.0,790.0 940.0,790.0 40.0,790.0 40.0,790.0"/><g class="stop"><title>A08-B10-L2 - stop 1</title><circle cx="840.0" cy="40.0" r="8.5"/><text x="840.0" y="43.1" text-anchor="middle">1</text></g><g class="stop"><title>A09-B08-L2 - stop 2</title><circle cx="940.0" cy="206.7" r="8.5"/><text x="940.0" y="209.8" text-anchor="middle">2</text></g><g class="stop"><title>A09-B08-L1 - stop 3</title><circle cx="940.0" cy="206.7" r="8.5"/><text x="940.0" y="209.8" text-anchor="middle">3</text></g><g class="stop"><title>A09-B05-L1 - stop 4</title><circle cx="940.0" cy="456.7" r="8.5"/><text x="940.0" y="459.8" text-anchor="middle">4</text></g><g class="stop"><title>A09-B01-L1 - stop 5</title><circle cx="940.0" cy="790.0" r="8.5"/><text x="940.0" y="793.1" text-anchor="middle">5</text></g><g class="stop"><title>A09-B01-L2 - stop 6</title><circle cx="940.0" cy="790.0" r="8.5"/><text x="940.0" y="793.1" text-anchor="middle">6</text></g></g><g class="route" data-order="ORD-1013"><polyline class="was" points="40.0,790.0 40.0,790.0 140.0,790.0 140.0,706.7 140.0,790.0 540.0,790.0 540.0,790.0 540.0,540.0 540.0,373.3 540.0,40.0 840.0,40.0 840.0,123.3 840.0,40.0 1040.0,40.0 1040.0,40.0 1040.0,40.0 540.0,40.0 540.0,206.7 540.0,40.0 340.0,40.0 340.0,540.0 340.0,790.0 40.0,790.0 40.0,790.0"/><polyline class="now" points="40.0,790.0 40.0,790.0 140.0,790.0 140.0,706.7 140.0,790.0 540.0,790.0 540.0,790.0 540.0,540.0 540.0,373.3 540.0,206.7 540.0,40.0 840.0,40.0 840.0,123.3 840.0,40.0 1040.0,40.0 1040.0,40.0 1040.0,40.0 340.0,40.0 340.0,540.0 340.0,790.0 40.0,790.0 40.0,790.0"/><g class="stop"><title>A01-B02-L2 - stop 1</title><circle cx="140.0" cy="706.7" r="8.5"/><text x="140.0" y="709.8" text-anchor="middle">1</text></g><g class="stop"><title>A05-B01-L2 - stop 2</title><circle cx="540.0" cy="790.0" r="8.5"/><text x="540.0" y="793.1" text-anchor="middle">2</text></g><g class="stop"><title>A05-B04-L1 - stop 3</title><circle cx="540.0" cy="540.0" r="8.5"/><text x="540.0" y="543.1" text-anchor="middle">3</text></g><g class="stop"><title>A05-B06-L1 - stop 4</title><circle cx="540.0" cy="373.3" r="8.5"/><text x="540.0" y="376.4" text-anchor="middle">4</text></g><g class="stop"><title>A05-B08-L1 - stop 5</title><circle cx="540.0" cy="206.7" r="8.5"/><text x="540.0" y="209.8" text-anchor="middle">5</text></g><g class="stop"><title>A08-B09-L1 - stop 6</title><circle cx="840.0" cy="123.3" r="8.5"/><text x="840.0" y="126.4" text-anchor="middle">6</text></g><g class="stop"><title>A10-B10-L1 - stop 7</title><circle cx="1040.0" cy="40.0" r="8.5"/><text x="1040.0" y="43.1" text-anchor="middle">7</text></g><g class="stop"><title>A03-B04-L2 - stop 8</title><circle cx="340.0" cy="540.0" r="8.5"/><text x="340.0" y="543.1" text-anchor="middle">8</text></g></g><g class="route" data-order="ORD-1014"><polyline class="was" points="40.0,790.0 40.0,790.0 140.0,790.0 140.0,40.0 140.0,40.0 240.0,40.0 240.0,706.7 240.0,373.3 240.0,123.3 240.0,790.0 340.0,790.0 340.0,706.7 340.0,790.0 740.0,790.0 740.0,123.3 740.0,40.0 840.0,40.0 840.0,540.0 840.0,790.0 940.0,790.0 940.0,540.0 940.0,373.3 940.0,206.7 940.0,40.0 240.0,40.0 240.0,40.0 240.0,623.3 240.0,790.0 740.0,790.0 740.0,456.7 740.0,790.0 240.0,790.0 240.0,540.0 240.0,790.0 40.0,790.0 40.0,790.0"/><polyline class="now" points="40.0,790.0 40.0,790.0 240.0,790.0 240.0,706.7 240.0,623.3 240.0,540.0 240.0,373.3 240.0,123.3 240.0,40.0 240.0,40.0 140.0,40.0 140.0,40.0 140.0,40.0 740.0,40.0 740.0,123.3 740.0,40.0 940.0,40.0 940.0,206.7 940.0,373.3 940.0,540.0 940.0,790.0 840.0,790.0 840.0,540.0 840.0,790.0 740.0,790.0 740.0,456.7 740.0,790.0 340.0,790.0 340.0,706.7 340.0,790.0 40.0,790.0 40.0,790.0"/><g class="stop"><title>A02-B02-L2 - stop 1</title><circle cx="240.0" cy="706.7" r="8.5"/><text x="240.0" y="709.8" text-anchor="middle">1</text></g><g class="stop"><title>A02-B03-L2 - stop 2</title><circle cx="240.0" cy="623.3" r="8.5"/><text x="240.0" y="626.4" text-anchor="middle">2</text></g><g class="stop"><title>A02-B04-L2 - stop 3</title><circle cx="240.0" cy="540.0" r="8.5"/><text x="240.0" y="543.1" text-anchor="middle">3</text></g><g class="stop"><title>A02-B06-L1 - stop 4</title><circle cx="240.0" cy="373.3" r="8.5"/><text x="240.0" y="376.4" text-anchor="middle">4</text></g><g class="stop"><title>A02-B09-L1 - stop 5</title><circle cx="240.0" cy="123.3" r="8.5"/><text x="240.0" y="126.4" text-anchor="middle">5</text></g><g class="stop"><title>A02-B10-L1 - stop 6</title><circle cx="240.0" cy="40.0" r="8.5"/><text x="240.0" y="43.1" text-anchor="middle">6</text></g><g class="stop"><title>A01-B10-L1 - stop 7</title><circle cx="140.0" cy="40.0" r="8.5"/><text x="140.0" y="43.1" text-anchor="middle">7</text></g><g class="stop"><title>A07-B09-L2 - stop 8</title><circle cx="740.0" cy="123.3" r="8.5"/><text x="740.0" y="126.4" text-anchor="middle">8</text></g><g class="stop"><title>A09-B08-L1 - stop 9</title><circle cx="940.0" cy="206.7" r="8.5"/><text x="940.0" y="209.8" text-anchor="middle">9</text></g><g class="stop"><title>A09-B06-L2 - stop 10</title><circle cx="940.0" cy="373.3" r="8.5"/><text x="940.0" y="376.4" text-anchor="middle">10</text></g><g class="stop"><title>A09-B04-L1 - stop 11</title><circle cx="940.0" cy="540.0" r="8.5"/><text x="940.0" y="543.1" text-anchor="middle">11</text></g><g class="stop"><title>A08-B04-L1 - stop 12</title><circle cx="840.0" cy="540.0" r="8.5"/><text x="840.0" y="543.1" text-anchor="middle">12</text></g><g class="stop"><title>A07-B05-L2 - stop 13</title><circle cx="740.0" cy="456.7" r="8.5"/><text x="740.0" y="459.8" text-anchor="middle">13</text></g><g class="stop"><title>A03-B02-L1 - stop 14</title><circle cx="340.0" cy="706.7" r="8.5"/><text x="340.0" y="709.8" text-anchor="middle">14</text></g></g><g class="route" data-order="ORD-1015"><polyline class="was" points="40.0,790.0 40.0,790.0 140.0,790.0 140.0,373.3 140.0,40.0 440.0,40.0 440.0,373.3 440.0,123.3 440.0,40.0 540.0,40.0 540.0,123.3 540.0,790.0 640.0,790.0 640.0,706.7 640.0,456.7 640.0,290.0 640.0,40.0 740.0,40.0 740.0,123.3 740.0,40.0 440.0,40.0 440.0,290.0 440.0,790.0 640.0,790.0 640.0,540.0 640.0,790.0 1040.0,790.0 1040.0,373.3 1040.0,790.0 40.0,790.0 40.0,790.0"/><polyline class="now" points="40.0,790.0 40.0,790.0 140.0,790.0 140.0,373.3 140.0,40.0 440.0,40.0 440.0,373.3 440.0,290.0 440.0,123.3 440.0,40.0 540.0,40.0 540.0,123.3 540.0,40.0 1040.0,40.0 1040.0,373.3 1040.0,40.0 740.0,40.0 740.0,123.3 740.0,40.0 640.0,40.0 640.0,290.0 640.0,456.7 640.0,540.0 640.0,706.7 640.0,790.0 40.0,790.0 40.0,790.0"/><g class="stop"><title>A01-B06-L1 - stop 1</title><circle cx="140.0" cy="373.3" r="8.5"/><text x="140.0" y="376.4" text-anchor="middle">1</text></g><g class="stop"><title>A04-B06-L1 - stop 2</title><circle cx="440.0" cy="373.3" r="8.5"/><text x="440.0" y="376.4" text-anchor="middle">2</text></g><g class="stop"><title>A04-B07-L2 - stop 3</title><circle cx="440.0" cy="290.0" r="8.5"/><text x="440.0" y="293.1" text-anchor="middle">3</text></g><g class="stop"><title>A04-B09-L1 - stop 4</title><circle cx="440.0" cy="123.3" r="8.5"/><text x="440.0" y="126.4" text-anchor="middle">4</text></g><g class="stop"><title>A05-B09-L1 - stop 5</title><circle cx="540.0" cy="123.3" r="8.5"/><text x="540.0" y="126.4" text-anchor="middle">5</text></g><g class="stop"><title>A10-B06-L1 - stop 6</title><circle cx="1040.0" cy="373.3" r="8.5"/><text x="1040.0" y="376.4" text-anchor="middle">6</text></g><g class="stop"><title>A07-B09-L2 - stop 7</title><circle cx="740.0" cy="123.3" r="8.5"/><text x="740.0" y="126.4" text-anchor="middle">7</text></g><g class="stop"><title>A06-B07-L2 - stop 8</title><circle cx="640.0" cy="290.0" r="8.5"/><text x="640.0" y="293.1" text-anchor="middle">8</text></g><g class="stop"><title>A06-B05-L1 - stop 9</title><circle cx="640.0" cy="456.7" r="8.5"/><text x="640.0" y="459.8" text-anchor="middle">9</text></g><g class="stop"><title>A06-B04-L1 - stop 10</title><circle cx="640.0" cy="540.0" r="8.5"/><text x="640.0" y="543.1" text-anchor="middle">10</text></g><g class="stop"><title>A06-B02-L2 - stop 11</title><circle cx="640.0" cy="706.7" r="8.5"/><text x="640.0" y="709.8" text-anchor="middle">11</text></g></g><g class="route" data-order="ORD-1016"><polyline class="was" points="40.0,790.0 40.0,790.0 240.0,790.0 240.0,123.3 240.0,40.0 340.0,40.0 340.0,540.0 340.0,790.0 540.0,790.0 540.0,623.3 540.0,456.7 540.0,373.3 540.0,373.3 540.0,290.0 540.0,206.7 540.0,790.0 640.0,790.0 640.0,706.7 640.0,790.0 840.0,790.0 840.0,206.7 840.0,206.7 840.0,40.0 840.0,40.0 540.0,40.0 540.0,706.7 540.0,790.0 940.0,790.0 940.0,206.7 940.0,40.0 540.0,40.0 540.0,123.3 540.0,790.0 140.0,790.0 140.0,706.7 140.0,790.0 40.0,790.0 40.0,790.0"/><polyline class="now" points="40.0,790.0 40.0,790.0 140.0,790.0 140.0,706.7 140.0,790.0 340.0,790.0 340.0,540.0 340.0,40.0 240.0,40.0 240.0,123.3 240.0,40.0 840.0,40.0 840.0,40.0 840.0,206.7 840.0,206.7 840.0,40.0 940.0,40.0 940.0,206.7 940.0,40.0 540.0,40.0 540.0,123.3 540.0,206.7 540.0,290.0 540.0,373.3 540.0,456.7 540.0,623.3 540.0,706.7 540.0,790.0 640.0,790.0 640.0,706.7 640.0,790.0 40.0,790.0 40.0,790.0"/><g class="stop"><title>A01-B02-L2 - stop 1</title><circle cx="140.0" cy="706.7" r="8.5"/><text x="140.0" y="709.8" text-anchor="middle">1</text></g><g class="stop"><title>A03-B04-L1 - stop 2</title><circle cx="340.0" cy="540.0" r="8.5"/><text x="340.0" y="543.1" text-anchor="middle">2</text></g><g class="stop"><title>A02-B09-L1 - stop 3</title><circle cx="240.0" cy="123.3" r="8.5"/><text x="240.0" y="126.4" text-anchor="middle">3</text></g><g class="stop"><title>A08-B10-L1 - stop 4</title><circle cx="840.0" cy="40.0" r="8.5"/><text x="840.0" y="43.1" text-anchor="middle">4</text></g><g class="stop"><title>A08-B08-L1 - stop 5</title><circle cx="840.0" cy="206.7" r="8.5"/><text x="840.0" y="209.8" text-anchor="middle">5</text></g><g class="stop"><title>A08-B08-L2 - stop 6</title><circle cx="840.0" cy="206.7" r="8.5"/><text x="840.0" y="209.8" text-anchor="middle">6</text></g><g class="stop"><title>A09-B08-L2 - stop 7</title><circle cx="940.0" cy="206.7" r="8.5"/><text x="940.0" y="209.8" text-anchor="middle">7</text></g><g class="stop"><title>A05-B09-L2 - stop 8</title><circle cx="540.0" cy="123.3" r="8.5"/><text x="540.0" y="126.4" text-anchor="middle">8</text></g><g class="stop"><title>A05-B08-L1 - stop 9</title><circle cx="540.0" cy="206.7" r="8.5"/><text x="540.0" y="209.8" text-anchor="middle">9</text></g><g class="stop"><title>A05-B07-L1 - stop 10</title><circle cx="540.0" cy="290.0" r="8.5"/><text x="540.0" y="293.1" text-anchor="middle">10</text></g><g class="stop"><title>A05-B06-L2 - stop 11</title><circle cx="540.0" cy="373.3" r="8.5"/><text x="540.0" y="376.4" text-anchor="middle">11</text></g><g class="stop"><title>A05-B05-L2 - stop 12</title><circle cx="540.0" cy="456.7" r="8.5"/><text x="540.0" y="459.8" text-anchor="middle">12</text></g><g class="stop"><title>A05-B03-L1 - stop 13</title><circle cx="540.0" cy="623.3" r="8.5"/><text x="540.0" y="626.4" text-anchor="middle">13</text></g><g class="stop"><title>A05-B02-L1 - stop 14</title><circle cx="540.0" cy="706.7" r="8.5"/><text x="540.0" y="709.8" text-anchor="middle">14</text></g><g class="stop"><title>A06-B02-L1 - stop 15</title><circle cx="640.0" cy="706.7" r="8.5"/><text x="640.0" y="709.8" text-anchor="middle">15</text></g></g><g class="route" data-order="ORD-1017"><polyline class="was" points="40.0,790.0 40.0,790.0 240.0,790.0 240.0,623.3 240.0,290.0 240.0,790.0 340.0,790.0 340.0,540.0 340.0,373.3 340.0,290.0 340.0,290.0 340.0,206.7 340.0,790.0 540.0,790.0 540.0,623.3 540.0,790.0 740.0,790.0 740.0,790.0 740.0,706.7 740.0,623.3 740.0,373.3 740.0,290.0 740.0,290.0 740.0,123.3 740.0,40.0 740.0,40.0 840.0,40.0 840.0,373.3 840.0,790.0 940.0,790.0 940.0,790.0 940.0,790.0 340.0,790.0 340.0,623.3 340.0,540.0 340.0,790.0 740.0,790.0 740.0,706.7 740.0,206.7 740.0,623.3 740.0,456.7 740.0,790.0 40.0,790.0 40.0,790.0"/><polyline class="now" points="40.0,790.0 40.0,790.0 240.0,790.0 240.0,623.3 240.0,290.0 240.0,40.0 340.0,40.0 340.0,206.7 340.0,290.0 340.0,290.0 340.0,373.3 340.0,540.0 340.0,540.0 340.0,623.3 340.0,790.0 540.0,790.0 540.0,623.3 540.0,790.0 740.0,790.0 740.0,790.0 740.0,706.7 740.0,706.7 740.0,623.3 740.0,623.3 740.0,456.7 740.0,373.3 740.0,290.0 740.0,206.7 740.0,123.3 740.0,40.0 740.0,40.0 840.0,40.0 840.0,373.3 840.0,790.0 940.0,790.0 940.0,790.0 940.0,790.0 40.0,790.0 40.0,790.0"/><g class="stop"><title>A02-B03-L2 - stop 1</title><circle cx="240.0" cy="623.3" r="8.5"/><text x="240.0" y="626.4" text-anchor="middle">1</text></g><g class="stop"><title>A02-B07-L2 - stop 2</title><circle cx="240.0" cy="290.0" r="8.5"/><text x="240.0" y="293.1" text-anchor="middle">2</text></g><g class="stop"><title>A03-B08-L1 - stop 3</title><circle cx="340.0" cy="206.7" r="8.5"/><text x="340.0" y="209.8" text-anchor="middle">3</text></g><g class="stop"><title>A03-B07-L1 - stop 4</title><circle cx="340.0" cy="290.0" r="8.5"/><text x="340.0" y="293.1" text-anchor="middle">4</text></g><g class="stop"><title>A03-B07-L2 - stop 5</title><circle cx="340.0" cy="290.0" r="8.5"/><text x="340.0" y="293.1" text-anchor="middle">5</text></g><g class="stop"><title>A03-B06-L2 - stop 6</title><circle cx="340.0" cy="373.3" r="8.5"/><text x="340.0" y="376.4" text-anchor="middle">6</text></g><g class="stop"><title>A03-B04-L1 - stop 7</title><circle cx="340.0" cy="540.0" r="8.5"/><text x="340.0" y="543.1" text-anchor="middle">7</text></g><g class="stop"><title>A03-B04-L2 - stop 8</title><circle cx="340.0" cy="540.0" r="8.5"/><text x="340.0" y="543.1" text-anchor="middle">8</text></g><g class="stop"><title>A03-B03-L1 - stop 9</title><circle cx="340.0" cy="623.3" r="8.5"/><text x="340.0" y="626.4" text-anchor="middle">9</text></g><g class="stop"><title>A05-B03-L2 - stop 10</title><circle cx="540.0" cy="623.3" r="8.5"/><text x="540.0" y="626.4" text-anchor="middle">10</text></g><g class="stop"><title>A07-B01-L1 - stop 11</title><circle cx="740.0" cy="790.0" r="8.5"/><text x="740.0" y="793.1" text-anchor="middle">11</text></g><g class="stop"><title>A07-B02-L2 - stop 12</title><circle cx="740.0" cy="706.7" r="8.5"/><text x="740.0" y="709.8" text-anchor="middle">12</text></g><g class="stop"><title>A07-B02-L1 - stop 13</title><circle cx="740.0" cy="706.7" r="8.5"/><text x="740.0" y="709.8" text-anchor="middle">13</text></g><g class="stop"><title>A07-B03-L1 - stop 14</title><circle cx="740.0" cy="623.3" r="8.5"/><text x="740.0" y="626.4" text-anchor="middle">14</text></g><g class="stop"><title>A07-B03-L2 - stop 15</title><circle cx="740.0" cy="623.3" r="8.5"/><text x="740.0" y="626.4" text-anchor="middle">15</text></g><g class="stop"><title>A07-B05-L1 - stop 16</title><circle cx="740.0" cy="456.7" r="8.5"/><text x="740.0" y="459.8" text-anchor="middle">16</text></g><g class="stop"><title>A07-B06-L1 - stop 17</title><circle cx="740.0" cy="373.3" r="8.5"/><text x="740.0" y="376.4" text-anchor="middle">17</text></g><g class="stop"><title>A07-B07-L1 - stop 18</title><circle cx="740.0" cy="290.0" r="8.5"/><text x="740.0" y="293.1" text-anchor="middle">18</text></g><g class="stop"><title>A07-B08-L1 - stop 19</title><circle cx="740.0" cy="206.7" r="8.5"/><text x="740.0" y="209.8" text-anchor="middle">19</text></g><g class="stop"><title>A07-B09-L1 - stop 20</title><circle cx="740.0" cy="123.3" r="8.5"/><text x="740.0" y="126.4" text-anchor="middle">20</text></g><g class="stop"><title>A07-B10-L2 - stop 21</title><circle cx="740.0" cy="40.0" r="8.5"/><text x="740.0" y="43.1" text-anchor="middle">21</text></g><g class="stop"><title>A08-B06-L1 - stop 22</title><circle cx="840.0" cy="373.3" r="8.5"/><text x="840.0" y="376.4" text-anchor="middle">22</text></g><g class="stop"><title>A09-B01-L2 - stop 23</title><circle cx="940.0" cy="790.0" r="8.5"/><text x="940.0" y="793.1" text-anchor="middle">23</text></g></g><g class="route" data-order="ORD-1018"><polyline class="was" points="40.0,790.0 40.0,790.0 240.0,790.0 240.0,206.7 240.0,40.0 440.0,40.0 440.0,40.0 440.0,40.0 540.0,40.0 540.0,540.0 540.0,790.0 840.0,790.0 840.0,706.7 840.0,706.7 840.0,540.0 840.0,456.7 840.0,373.3 840.0,290.0 840.0,206.7 840.0,206.7 840.0,123.3 840.0,40.0 840.0,40.0 940.0,40.0 940.0,373.3 940.0,790.0 640.0,790.0 640.0,540.0 640.0,40.0 840.0,40.0 840.0,123.3 840.0,123.3 840.0,456.7 840.0,40.0 840.0,790.0 40.0,790.0 40.0,790.0"/><polyline class="now" points="40.0,790.0 40.0,790.0 240.0,790.0 240.0,206.7 240.0,40.0 440.0,40.0 440.0,40.0 440.0,40.0 940.0,40.0 940.0,373.3 940.0,40.0 840.0,40.0 840.0,40.0 840.0,40.0 840.0,123.3 840.0,123.3 840.0,206.7 840.0,206.7 840.0,290.0 840.0,373.3 840.0,456.7 840.0,456.7 840.0,540.0 840.0,706.7 840.0,706.7 840.0,790.0 640.0,790.0 640.0,540.0 640.0,790.0 540.0,790.0 540.0,540.0 540.0,790.0 40.0,790.0 40.0,790.0"/><g class="stop"><title>A02-B08-L2 - stop 1</title><circle cx="240.0" cy="206.7" r="8.5"/><text x="240.0" y="209.8" text-anchor="middle">1</text></g><g class="stop"><title>A04-B10-L2 - stop 2</title><circle cx="440.0" cy="40.0" r="8.5"/><text x="440.0" y="43.1" text-anchor="middle">2</text></g><g class="stop"><title>A09-B06-L2 - stop 3</title><circle cx="940.0" cy="373.3" r="8.5"/><text x="940.0" y="376.4" text-anchor="middle">3</text></g><g class="stop"><title>A08-B10-L1 - stop 4</title><circle cx="840.0" cy="40.0" r="8.5"/><text x="840.0" y="43.1" text-anchor="middle">4</text></g><g class="stop"><title>A08-B10-L2 - stop 5</title><circle cx="840.0" cy="40.0" r="8.5"/><text x="840.0" y="43.1" text-anchor="middle">5</text></g><g class="stop"><title>A08-B09-L2 - stop 6</title><circle cx="840.0" cy="123.3" r="8.5"/><text x="840.0" y="126.4" text-anchor="middle">6</text></g><g class="stop"><title>A08-B09-L1 - stop 7</title><circle cx="840.0" cy="123.3" r="8.5"/><text x="840.0" y="126.4" text-anchor="middle">7</text></g><g class="stop"><title>A08-B08-L2 - stop 8</title><circle cx="840.0" cy="206.7" r="8.5"/><text x="840.0" y="209.8" text-anchor="middle">8</text></g><g class="stop"><title>A08-B08-L1 - stop 9</title><circle cx="840.0" cy="206.7" r="8.5"/><text x="840.0" y="209.8" text-anchor="middle">9</text></g><g class="stop"><title>A08-B07-L1 - stop 10</title><circle cx="840.0" cy="290.0" r="8.5"/><text x="840.0" y="293.1" text-anchor="middle">10</text></g><g class="stop"><title>A08-B06-L2 - stop 11</title><circle cx="840.0" cy="373.3" r="8.5"/><text x="840.0" y="376.4" text-anchor="middle">11</text></g><g class="stop"><title>A08-B05-L2 - stop 12</title><circle cx="840.0" cy="456.7" r="8.5"/><text x="840.0" y="459.8" text-anchor="middle">12</text></g><g class="stop"><title>A08-B05-L1 - stop 13</title><circle cx="840.0" cy="456.7" r="8.5"/><text x="840.0" y="459.8" text-anchor="middle">13</text></g><g class="stop"><title>A08-B04-L2 - stop 14</title><circle cx="840.0" cy="540.0" r="8.5"/><text x="840.0" y="543.1" text-anchor="middle">14</text></g><g class="stop"><title>A08-B02-L2 - stop 15</title><circle cx="840.0" cy="706.7" r="8.5"/><text x="840.0" y="709.8" text-anchor="middle">15</text></g><g class="stop"><title>A08-B02-L1 - stop 16</title><circle cx="840.0" cy="706.7" r="8.5"/><text x="840.0" y="709.8" text-anchor="middle">16</text></g><g class="stop"><title>A06-B04-L2 - stop 17</title><circle cx="640.0" cy="540.0" r="8.5"/><text x="640.0" y="543.1" text-anchor="middle">17</text></g><g class="stop"><title>A05-B04-L2 - stop 18</title><circle cx="540.0" cy="540.0" r="8.5"/><text x="540.0" y="543.1" text-anchor="middle">18</text></g></g><g class="route" data-order="ORD-1019"><polyline class="was" points="40.0,790.0 40.0,790.0 140.0,790.0 140.0,790.0 140.0,790.0 540.0,790.0 540.0,706.7 540.0,290.0 540.0,790.0 640.0,790.0 640.0,706.7 640.0,623.3 640.0,540.0 640.0,40.0 640.0,40.0 740.0,40.0 740.0,540.0 740.0,790.0 940.0,790.0 940.0,790.0 940.0,706.7 940.0,623.3 940.0,623.3 940.0,540.0 940.0,540.0 940.0,456.7 940.0,373.3 940.0,206.7 940.0,40.0 940.0,40.0 440.0,40.0 440.0,623.3 440.0,790.0 940.0,790.0 940.0,206.7 940.0,40.0 640.0,40.0 640.0,290.0 640.0,40.0 940.0,40.0 940.0,290.0 940.0,290.0 940.0,290.0 940.0,790.0 40.0,790.0 40.0,790.0"/><polyline class="now" points="40.0,790.0 40.0,790.0 140.0,790.0 140.0,790.0 140.0,790.0 440.0,790.0 440.0,623.3 440.0,790.0 540.0,790.0 540.0,706.7 540.0,290.0 540.0,40.0 640.0,40.0 640.0,40.0 640.0,290.0 640.0,540.0 640.0,623.3 640.0,706.7 640.0,790.0 740.0,790.0 740.0,540.0 740.0,40.0 940.0,40.0 940.0,40.0 940.0,206.7 940.0,206.7 940.0,290.0 940.0,290.0 940.0,373.3 940.0,456.7 940.0,540.0 940.0,540.0 940.0,623.3 940.0,623.3 940.0,706.7 940.0,790.0 940.0,790.0 40.0,790.0 40.0,790.0"/><g class="stop"><title>A01-B01-L2 - stop 1</title><circle cx="140.0" cy="790.0" r="8.5"/><text x="140.0" y="793.1" text-anchor="middle">1</text></g><g class="stop"><title>A04-B03-L2 - stop 2</title><circle cx="440.0" cy="623.3" r="8.5"/><text x="440.0" y="626.4" text-anchor="middle">2</text></g><g class="stop"><title>A05-B02-L2 - stop 3</title><circle cx="540.0" cy="706.7" r="8.5"/><text x="540.0" y="709.8" text-anchor="middle">3</text></g><g class="stop"><title>A05-B07-L1 - stop 4</title><circle cx="540.0" cy="290.0" r="8.5"/><text x="540.0" y="293.1" text-anchor="middle">4</text></g><g class="stop"><title>A06-B10-L2 - stop 5</title><circle cx="640.0" cy="40.0" r="8.5"/><text x="640.0" y="43.1" text-anchor="middle">5</text></g><g class="stop"><title>A06-B07-L1 - stop 6</title><circle cx="640.0" cy="290.0" r="8.5"/><text x="640.0" y="293.1" text-anchor="middle">6</text></g><g class="stop"><title>A06-B04-L1 - stop 7</title><circle cx="640.0" cy="540.0" r="8.5"/><text x="640.0" y="543.1" text-anchor="middle">7</text></g><g class="stop"><title>A06-B03-L2 - stop 8</title><circle cx="640.0" cy="623.3" r="8.5"/><text x="640.0" y="626.4" text-anchor="middle">8</text></g><g class="stop"><title>A06-B02-L1 - stop 9</title><circle cx="640.0" cy="706.7" r="8.5"/><text x="640.0" y="709.8" text-anchor="middle">9</text></g><g class="stop"><title>A07-B04-L2 - stop 10</title><circle cx="740.0" cy="540.0" r="8.5"/><text x="740.0" y="543.1" text-anchor="middle">10</text></g><g class="stop"><title>A09-B10-L1 - stop 11</title><circle cx="940.0" cy="40.0" r="8.5"/><text x="940.0" y="43.1" text-anchor="middle">11</text></g><g class="stop"><title>A09-B08-L2 - stop 12</title><circle cx="940.0" cy="206.7" r="8.5"/><text x="940.0" y="209.8" text-anchor="middle">12</text></g><g class="stop"><title>A09-B08-L1 - stop 13</title><circle cx="940.0" cy="206.7" r="8.5"/><text x="940.0" y="209.8" text-anchor="middle">13</text></g><g class="stop"><title>A09-B07-L2 - stop 14</title><circle cx="940.0" cy="290.0" r="8.5"/><text x="940.0" y="293.1" text-anchor="middle">14</text></g><g class="stop"><title>A09-B07-L1 - stop 15</title><circle cx="940.0" cy="290.0" r="8.5"/><text x="940.0" y="293.1" text-anchor="middle">15</text></g><g class="stop"><title>A09-B06-L1 - stop 16</title><circle cx="940.0" cy="373.3" r="8.5"/><text x="940.0" y="376.4" text-anchor="middle">16</text></g><g class="stop"><title>A09-B05-L1 - stop 17</title><circle cx="940.0" cy="456.7" r="8.5"/><text x="940.0" y="459.8" text-anchor="middle">17</text></g><g class="stop"><title>A09-B04-L1 - stop 18</title><circle cx="940.0" cy="540.0" r="8.5"/><text x="940.0" y="543.1" text-anchor="middle">18</text></g><g class="stop"><title>A09-B04-L2 - stop 19</title><circle cx="940.0" cy="540.0" r="8.5"/><text x="940.0" y="543.1" text-anchor="middle">19</text></g><g class="stop"><title>A09-B03-L1 - stop 20</title><circle cx="940.0" cy="623.3" r="8.5"/><text x="940.0" y="626.4" text-anchor="middle">20</text></g><g class="stop"><title>A09-B03-L2 - stop 21</title><circle cx="940.0" cy="623.3" r="8.5"/><text x="940.0" y="626.4" text-anchor="middle">21</text></g><g class="stop"><title>A09-B02-L1 - stop 22</title><circle cx="940.0" cy="706.7" r="8.5"/><text x="940.0" y="709.8" text-anchor="middle">22</text></g><g class="stop"><title>A09-B01-L1 - stop 23</title><circle cx="940.0" cy="790.0" r="8.5"/><text x="940.0" y="793.1" text-anchor="middle">23</text></g></g><g class="route" data-order="ORD-1020"><polyline class="was" points="40.0,790.0 40.0,790.0 240.0,790.0 240.0,540.0 240.0,206.7 240.0,790.0 340.0,790.0 340.0,790.0 340.0,790.0 340.0,540.0 340.0,290.0 340.0,206.7 340.0,790.0 640.0,790.0 640.0,623.3 640.0,790.0 740.0,790.0 740.0,373.3 740.0,290.0 740.0,790.0 840.0,790.0 840.0,706.7 840.0,623.3 840.0,623.3 840.0,456.7 840.0,373.3 840.0,290.0 840.0,290.0 840.0,123.3 840.0,123.3 840.0,706.7 840.0,790.0 740.0,790.0 740.0,456.7 740.0,790.0 840.0,790.0 840.0,790.0 840.0,790.0 340.0,790.0 340.0,623.3 340.0,790.0 840.0,790.0 840.0,456.7 840.0,540.0 840.0,790.0 40.0,790.0 40.0,790.0"/><polyline class="now" points="40.0,790.0 40.0,790.0 240.0,790.0 240.0,540.0 240.0,206.7 240.0,40.0 340.0,40.0 340.0,206.7 340.0,290.0 340.0,540.0 340.0,623.3 340.0,790.0 340.0,790.0 340.0,790.0 640.0,790.0 640.0,623.3 640.0,790.0 840.0,790.0 840.0,790.0 840.0,706.7 840.0,706.7 840.0,623.3 840.0,623.3 840.0,540.0 840.0,456.7 840.0,456.7 840.0,373.3 840.0,290.0 840.0,290.0 840.0,123.3 840.0,123.3 840.0,40.0 740.0,40.0 740.0,290.0 740.0,373.3 740.0,456.7 740.0,790.0 40.0,790.0 40.0,790.0"/><g class="stop"><title>A02-B04-L1 - stop 1</title><circle cx="240.0" cy="540.0" r="8.5"/><text x="240.0" y="543.1" text-anchor="middle">1</text></g><g class="stop"><title>A02-B08-L2 - stop 2</title><circle cx="240.0" cy="206.7" r="8.5"/><text x="240.0" y="209.8" text-anchor="middle">2</text></g><g class="stop"><title>A03-B08-L2 - stop 3</title><circle cx="340.0" cy="206.7" r="8.5"/><text x="340.0" y="209.8" text-anchor="middle">3</text></g><g class="stop"><title>A03-B07-L2 - stop 4</title><circle cx="340.0" cy="290.0" r="8.5"/><text x="340.0" y="293.1" text-anchor="middle">4</text></g><g class="stop"><title>A03-B04-L2 - stop 5</title><circle cx="340.0" cy="540.0" r="8.5"/><text x="340.0" y="543.1" text-anchor="middle">5</text></g><g class="stop"><title>A03-B03-L1 - stop 6</title><circle cx="340.0" cy="623.3" r="8.5"/><text x="340.0" y="626.4" text-anchor="middle">6</text></g><g class="stop"><title>A03-B01-L2 - stop 7</title><circle cx="340.0" cy="790.0" r="8.5"/><text x="340.0" y="793.1" text-anchor="middle">7</text></g><g class="stop"><title>A03-B01-L1 - stop 8</title><circle cx="340.0" cy="790.0" r="8.5"/><text x="340.0" y="793.1" text-anchor="middle">8</text></g><g class="stop"><title>A06-B03-L1 - stop 9</title><circle cx="640.0" cy="623.3" r="8.5"/><text x="640.0" y="626.4" text-anchor="middle">9</text></g><g class="stop"><title>A08-B01-L1 - stop 10</title><circle cx="840.0" cy="790.0" r="8.5"/><text x="840.0" y="793.1" text-anchor="middle">10</text></g><g class="stop"><title>A08-B02-L1 - stop 11</title><circle cx="840.0" cy="706.7" r="8.5"/><text x="840.0" y="709.8" text-anchor="middle">11</text></g><g class="stop"><title>A08-B02-L2 - stop 12</title><circle cx="840.0" cy="706.7" r="8.5"/><text x="840.0" y="709.8" text-anchor="middle">12</text></g><g class="stop"><title>A08-B03-L1 - stop 13</title><circle cx="840.0" cy="623.3" r="8.5"/><text x="840.0" y="626.4" text-anchor="middle">13</text></g><g class="stop"><title>A08-B03-L2 - stop 14</title><circle cx="840.0" cy="623.3" r="8.5"/><text x="840.0" y="626.4" text-anchor="middle">14</text></g><g class="stop"><title>A08-B04-L2 - stop 15</title><circle cx="840.0" cy="540.0" r="8.5"/><text x="840.0" y="543.1" text-anchor="middle">15</text></g><g class="stop"><title>A08-B05-L1 - stop 16</title><circle cx="840.0" cy="456.7" r="8.5"/><text x="840.0" y="459.8" text-anchor="middle">16</text></g><g class="stop"><title>A08-B05-L2 - stop 17</title><circle cx="840.0" cy="456.7" r="8.5"/><text x="840.0" y="459.8" text-anchor="middle">17</text></g><g class="stop"><title>A08-B06-L2 - stop 18</title><circle cx="840.0" cy="373.3" r="8.5"/><text x="840.0" y="376.4" text-anchor="middle">18</text></g><g class="stop"><title>A08-B07-L1 - stop 19</title><circle cx="840.0" cy="290.0" r="8.5"/><text x="840.0" y="293.1" text-anchor="middle">19</text></g><g class="stop"><title>A08-B07-L2 - stop 20</title><circle cx="840.0" cy="290.0" r="8.5"/><text x="840.0" y="293.1" text-anchor="middle">20</text></g><g class="stop"><title>A08-B09-L1 - stop 21</title><circle cx="840.0" cy="123.3" r="8.5"/><text x="840.0" y="126.4" text-anchor="middle">21</text></g><g class="stop"><title>A08-B09-L2 - stop 22</title><circle cx="840.0" cy="123.3" r="8.5"/><text x="840.0" y="126.4" text-anchor="middle">22</text></g><g class="stop"><title>A07-B07-L2 - stop 23</title><circle cx="740.0" cy="290.0" r="8.5"/><text x="740.0" y="293.1" text-anchor="middle">23</text></g><g class="stop"><title>A07-B06-L2 - stop 24</title><circle cx="740.0" cy="373.3" r="8.5"/><text x="740.0" y="376.4" text-anchor="middle">24</text></g><g class="stop"><title>A07-B05-L1 - stop 25</title><circle cx="740.0" cy="456.7" r="8.5"/><text x="740.0" y="459.8" text-anchor="middle">25</text></g></g>
+    </svg>
+    <div class="legend">
+      <span><i style="background:var(--was);opacity:.62"></i>As issued</span>
+      <span><i style="background:var(--now)"></i>Optimized, numbered in pick order</span>
+      <span><span class="sw"></span>Racking - routes go around it, never through</span>
+    </div>
+    <div class="caption" id="cap"></div>
+  </div>
+
+  <div class="panel">
+    <div class="phead">
+      <h2>Results — every order, same figures as results.csv</h2>
+      <div class="filter">
+        <input type="search" placeholder="order or slot…" oninput="filt(this.value)"
+               aria-label="Filter by order id or slot label">
+        <span class="cnt"><span id="shown">20</span> of <span id="total-count">20</span></span>
+      </div>
+    </div>
+    <div class="tablewrap">
+      <table>
+        <thead><tr>
+          <th data-col="0" onclick="sortBy(this)">Order</th>
+          <th data-col="1" class="r" onclick="sortBy(this)">Lines</th>
+          <th data-col="2" class="r" onclick="sortBy(this)">Stops</th>
+          <th data-col="3" class="r" onclick="sortBy(this)">As issued ft</th>
+          <th data-col="4" class="r" onclick="sortBy(this)">Optimized ft</th>
+          <th data-col="5" class="r" onclick="sortBy(this)">Saved ft</th>
+          <th data-col="6" class="r" onclick="sortBy(this)">Improvement</th>
+          <th data-col="7" onclick="sortBy(this)">Optimized sequence</th>
+        </tr></thead>
+        <tbody id="tbody"><tr data-order="ORD-1001" data-search="ord-1001 a01-b01-l1 → a01-b04-l2 → a01-b07-l1 → a01-b07-l2 → a01-b09-l1 → a02-b06-l1 → a02-b04-l1 → a02-b03-l1 → a03-b05-l2 → a06-b04-l1 → a07-b08-l2 → a09-b05-l1" onclick="pick('ORD-1001')"><td class="num" data-v="ORD-1001">ORD-1001</td><td class="num r" data-v="13">13</td><td class="num r" data-v="12">12</td><td class="num r" data-v="876.0">876</td><td class="num r" data-v="696.0">696</td><td class="num r" data-v="180.0">180</td><td class="r" data-v="20.5"><span class="minibar"><span style="width:38%"></span></span><span class="pctcell">20.5%</span></td><td class="seq" data-v="ORD-1001" title="A01-B01-L1 → A01-B04-L2 → A01-B07-L1 → A01-B07-L2 → A01-B09-L1 → A02-B06-L1 → A02-B04-L1 → A02-B03-L1 → A03-B05-L2 → A06-B04-L1 → A07-B08-L2 → A09-B05-L1">A01-B01-L1 → A01-B04-L2 → A01-B07-L1 → A01-B07-L2 → A01-B09-L1 → A02-B06-L1 → A02-B04-L1 → A02-B03-L1 → A03-B05-L2 → A06-B04-L1 → A07-B08-L2 → A09-B05-L1</td></tr><tr data-order="ORD-1002" data-search="ord-1002 a01-b06-l1 → a02-b07-l2 → a02-b03-l2 → a04-b01-l2 → a04-b06-l2 → a04-b09-l2 → a06-b07-l2 → a10-b01-l1 → a10-b03-l2" onclick="pick('ORD-1002')"><td class="num" data-v="ORD-1002">ORD-1002</td><td class="num r" data-v="9">9</td><td class="num r" data-v="9">9</td><td class="num r" data-v="828.0">828</td><td class="num r" data-v="640.0">640</td><td class="num r" data-v="188.0">188</td><td class="r" data-v="22.7"><span class="minibar"><span style="width:42%"></span></span><span class="pctcell">22.7%</span></td><td class="seq" data-v="ORD-1002" title="A01-B06-L1 → A02-B07-L2 → A02-B03-L2 → A04-B01-L2 → A04-B06-L2 → A04-B09-L2 → A06-B07-L2 → A10-B01-L1 → A10-B03-L2">A01-B06-L1 → A02-B07-L2 → A02-B03-L2 → A04-B01-L2 → A04-B06-L2 → A04-B09-L2 → A06-B07-L2 → A10-B01-L1 → A10-B03-L2</td></tr><tr data-order="ORD-1003" data-search="ord-1003 a03-b05-l1 → a04-b01-l1 → a04-b01-l2 → a04-b02-l1 → a04-b03-l1 → a04-b03-l2 → a04-b04-l1 → a04-b04-l2 → a04-b05-l2 → a04-b06-l1 → a04-b06-l2 → a04-b07-l1 → a04-b08-l2 → a04-b09-l1 → a04-b09-l2 → a04-b10-l1 → a03-b10-l1 → a05-b07-l2 → a06-b07-l2 → a10-b10-l1 → a10-b06-l1 → a10-b05-l2 → a10-b01-l1 → a09-b03-l1" onclick="pick('ORD-1003')"><td class="num" data-v="ORD-1003">ORD-1003</td><td class="num r" data-v="25">25</td><td class="num r" data-v="24">24</td><td class="num r" data-v="1244.0">1,244</td><td class="num r" data-v="684.0">684</td><td class="num r" data-v="560.0">560</td><td class="r" data-v="45.0"><span class="minibar"><span style="width:83%"></span></span><span class="pctcell">45.0%</span></td><td class="seq" data-v="ORD-1003" title="A03-B05-L1 → A04-B01-L1 → A04-B01-L2 → A04-B02-L1 → A04-B03-L1 → A04-B03-L2 → A04-B04-L1 → A04-B04-L2 → A04-B05-L2 → A04-B06-L1 → A04-B06-L2 → A04-B07-L1 → A04-B08-L2 → A04-B09-L1 → A04-B09-L2 → A04-B10-L1 → A03-B10-L1 → A05-B07-L2 → A06-B07-L2 → A10-B10-L1 → A10-B06-L1 → A10-B05-L2 → A10-B01-L1 → A09-B03-L1">A03-B05-L1 → A04-B01-L1 → A04-B01-L2 → A04-B02-L1 → A04-B03-L1 → A04-B03-L2 → A04-B04-L1 → A04-B04-L2 → A04-B05-L2 → A04-B06-L1 → A04-B06-L2 → A04-B07-L1 → A04-B08-L2 → A04-B09-L1 → A04-B09-L2 → A04-B10-L1 → A03-B10-L1 → A05-B07-L2 → A06-B07-L2 → A10-B10-L1 → A10-B06-L1 → A10-B05-L2 → A10-B01-L1 → A09-B03-L1</td></tr><tr data-order="ORD-1004" data-search="ord-1004 a01-b06-l1 → a03-b10-l1 → a03-b10-l2 → a03-b08-l2 → a03-b07-l2 → a03-b06-l2 → a03-b03-l2 → a04-b01-l1 → a04-b02-l1 → a04-b04-l1 → a04-b05-l2 → a04-b05-l1 → a04-b09-l1 → a04-b09-l2 → a04-b10-l2 → a06-b07-l2 → a10-b01-l1" onclick="pick('ORD-1004')"><td class="num" data-v="ORD-1004">ORD-1004</td><td class="num r" data-v="18">18</td><td class="num r" data-v="17">17</td><td class="num r" data-v="1088.0">1,088</td><td class="num r" data-v="600.0">600</td><td class="num r" data-v="488.0">488</td><td class="r" data-v="44.9"><span class="minibar"><span style="width:83%"></span></span><span class="pctcell">44.9%</span></td><td class="seq" data-v="ORD-1004" title="A01-B06-L1 → A03-B10-L1 → A03-B10-L2 → A03-B08-L2 → A03-B07-L2 → A03-B06-L2 → A03-B03-L2 → A04-B01-L1 → A04-B02-L1 → A04-B04-L1 → A04-B05-L2 → A04-B05-L1 → A04-B09-L1 → A04-B09-L2 → A04-B10-L2 → A06-B07-L2 → A10-B01-L1">A01-B06-L1 → A03-B10-L1 → A03-B10-L2 → A03-B08-L2 → A03-B07-L2 → A03-B06-L2 → A03-B03-L2 → A04-B01-L1 → A04-B02-L1 → A04-B04-L1 → A04-B05-L2 → A04-B05-L1 → A04-B09-L1 → A04-B09-L2 → A04-B10-L2 → A06-B07-L2 → A10-B01-L1</td></tr><tr data-order="ORD-1005" data-search="ord-1005 a01-b05-l2 → a02-b02-l1 → a02-b02-l2 → a02-b03-l2 → a02-b04-l2 → a02-b04-l1 → a02-b05-l2 → a02-b07-l2 → a02-b08-l1 → a02-b09-l2 → a02-b10-l2 → a02-b10-l1 → a05-b06-l2 → a06-b08-l1 → a08-b06-l1 → a09-b06-l2" onclick="pick('ORD-1005')"><td class="num" data-v="ORD-1005">ORD-1005</td><td class="num r" data-v="16">16</td><td class="num r" data-v="16">16</td><td class="num r" data-v="1040.0">1,040</td><td class="num r" data-v="676.0">676</td><td class="num r" data-v="364.0">364</td><td class="r" data-v="35.0"><span class="minibar"><span style="width:65%"></span></span><span class="pctcell">35.0%</span></td><td class="seq" data-v="ORD-1005" title="A01-B05-L2 → A02-B02-L1 → A02-B02-L2 → A02-B03-L2 → A02-B04-L2 → A02-B04-L1 → A02-B05-L2 → A02-B07-L2 → A02-B08-L1 → A02-B09-L2 → A02-B10-L2 → A02-B10-L1 → A05-B06-L2 → A06-B08-L1 → A08-B06-L1 → A09-B06-L2">A01-B05-L2 → A02-B02-L1 → A02-B02-L2 → A02-B03-L2 → A02-B04-L2 → A02-B04-L1 → A02-B05-L2 → A02-B07-L2 → A02-B08-L1 → A02-B09-L2 → A02-B10-L2 → A02-B10-L1 → A05-B06-L2 → A06-B08-L1 → A08-B06-L1 → A09-B06-L2</td></tr><tr data-order="ORD-1006" data-search="ord-1006 a02-b01-l2 → a02-b02-l1 → a02-b02-l2 → a02-b03-l2 → a02-b04-l2 → a02-b05-l2 → a02-b07-l1 → a02-b07-l2 → a02-b08-l1 → a02-b10-l1 → a03-b06-l2 → a03-b02-l1 → a07-b04-l2 → a07-b09-l2 → a09-b10-l1 → a09-b10-l2 → a09-b06-l2 → a09-b04-l1 → a09-b03-l1 → a10-b03-l2" onclick="pick('ORD-1006')"><td class="num" data-v="ORD-1006">ORD-1006</td><td class="num r" data-v="20">20</td><td class="num r" data-v="20">20</td><td class="num r" data-v="1396.0">1,396</td><td class="num r" data-v="640.0">640</td><td class="num r" data-v="756.0">756</td><td class="r" data-v="54.2"><span class="minibar"><span style="width:100%"></span></span><span class="pctcell">54.2%</span></td><td class="seq" data-v="ORD-1006" title="A02-B01-L2 → A02-B02-L1 → A02-B02-L2 → A02-B03-L2 → A02-B04-L2 → A02-B05-L2 → A02-B07-L1 → A02-B07-L2 → A02-B08-L1 → A02-B10-L1 → A03-B06-L2 → A03-B02-L1 → A07-B04-L2 → A07-B09-L2 → A09-B10-L1 → A09-B10-L2 → A09-B06-L2 → A09-B04-L1 → A09-B03-L1 → A10-B03-L2">A02-B01-L2 → A02-B02-L1 → A02-B02-L2 → A02-B03-L2 → A02-B04-L2 → A02-B05-L2 → A02-B07-L1 → A02-B07-L2 → A02-B08-L1 → A02-B10-L1 → A03-B06-L2 → A03-B02-L1 → A07-B04-L2 → A07-B09-L2 → A09-B10-L1 → A09-B10-L2 → A09-B06-L2 → A09-B04-L1 → A09-B03-L1 → A10-B03-L2</td></tr><tr data-order="ORD-1007" data-search="ord-1007 a01-b04-l2 → a01-b04-l1 → a01-b05-l2 → a01-b08-l1 → a02-b10-l1 → a02-b10-l2 → a02-b09-l2 → a02-b08-l1 → a02-b07-l2 → a02-b06-l1 → a02-b05-l1 → a02-b05-l2 → a02-b04-l2 → a02-b03-l2 → a02-b02-l2 → a02-b01-l1 → a02-b01-l2 → a09-b04-l1 → a09-b03-l1 → a10-b03-l2 → a10-b06-l2 → a08-b07-l2 → a07-b08-l2" onclick="pick('ORD-1007')"><td class="num" data-v="ORD-1007">ORD-1007</td><td class="num r" data-v="25">25</td><td class="num r" data-v="23">23</td><td class="num r" data-v="940.0">940</td><td class="num r" data-v="720.0">720</td><td class="num r" data-v="220.0">220</td><td class="r" data-v="23.4"><span class="minibar"><span style="width:43%"></span></span><span class="pctcell">23.4%</span></td><td class="seq" data-v="ORD-1007" title="A01-B04-L2 → A01-B04-L1 → A01-B05-L2 → A01-B08-L1 → A02-B10-L1 → A02-B10-L2 → A02-B09-L2 → A02-B08-L1 → A02-B07-L2 → A02-B06-L1 → A02-B05-L1 → A02-B05-L2 → A02-B04-L2 → A02-B03-L2 → A02-B02-L2 → A02-B01-L1 → A02-B01-L2 → A09-B04-L1 → A09-B03-L1 → A10-B03-L2 → A10-B06-L2 → A08-B07-L2 → A07-B08-L2">A01-B04-L2 → A01-B04-L1 → A01-B05-L2 → A01-B08-L1 → A02-B10-L1 → A02-B10-L2 → A02-B09-L2 → A02-B08-L1 → A02-B07-L2 → A02-B06-L1 → A02-B05-L1 → A02-B05-L2 → A02-B04-L2 → A02-B03-L2 → A02-B02-L2 → A02-B01-L1 → A02-B01-L2 → A09-B04-L1 → A09-B03-L1 → A10-B03-L2 → A10-B06-L2 → A08-B07-L2 → A07-B08-L2</td></tr><tr data-order="ORD-1008" data-search="ord-1008 a03-b01-l2 → a03-b02-l1 → a03-b03-l2 → a03-b03-l1 → a03-b04-l1 → a03-b04-l2 → a03-b05-l1 → a03-b07-l1 → a03-b07-l2 → a03-b08-l1 → a03-b08-l2 → a03-b09-l1 → a03-b10-l2 → a07-b07-l1 → a09-b07-l1 → a09-b08-l1 → a09-b10-l2 → a10-b06-l2" onclick="pick('ORD-1008')"><td class="num" data-v="ORD-1008">ORD-1008</td><td class="num r" data-v="18">18</td><td class="num r" data-v="18">18</td><td class="num r" data-v="844.0">844</td><td class="num r" data-v="540.0">540</td><td class="num r" data-v="304.0">304</td><td class="r" data-v="36.0"><span class="minibar"><span style="width:67%"></span></span><span class="pctcell">36.0%</span></td><td class="seq" data-v="ORD-1008" title="A03-B01-L2 → A03-B02-L1 → A03-B03-L2 → A03-B03-L1 → A03-B04-L1 → A03-B04-L2 → A03-B05-L1 → A03-B07-L1 → A03-B07-L2 → A03-B08-L1 → A03-B08-L2 → A03-B09-L1 → A03-B10-L2 → A07-B07-L1 → A09-B07-L1 → A09-B08-L1 → A09-B10-L2 → A10-B06-L2">A03-B01-L2 → A03-B02-L1 → A03-B03-L2 → A03-B03-L1 → A03-B04-L1 → A03-B04-L2 → A03-B05-L1 → A03-B07-L1 → A03-B07-L2 → A03-B08-L1 → A03-B08-L2 → A03-B09-L1 → A03-B10-L2 → A07-B07-L1 → A09-B07-L1 → A09-B08-L1 → A09-B10-L2 → A10-B06-L2</td></tr><tr data-order="ORD-1009" data-search="ord-1009 a04-b03-l1 → a04-b04-l1 → a04-b05-l1 → a04-b10-l1 → a04-b10-l2 → a08-b10-l1 → a08-b10-l2 → a08-b09-l2 → a08-b08-l2 → a08-b07-l2 → a08-b07-l1 → a08-b05-l1 → a08-b04-l1 → a08-b03-l1 → a08-b02-l1 → a08-b01-l2 → a09-b07-l1 → a06-b01-l2" onclick="pick('ORD-1009')"><td class="num" data-v="ORD-1009">ORD-1009</td><td class="num r" data-v="19">19</td><td class="num r" data-v="18">18</td><td class="num r" data-v="932.0">932</td><td class="num r" data-v="516.0">516</td><td class="num r" data-v="416.0">416</td><td class="r" data-v="44.6"><span class="minibar"><span style="width:82%"></span></span><span class="pctcell">44.6%</span></td><td class="seq" data-v="ORD-1009" title="A04-B03-L1 → A04-B04-L1 → A04-B05-L1 → A04-B10-L1 → A04-B10-L2 → A08-B10-L1 → A08-B10-L2 → A08-B09-L2 → A08-B08-L2 → A08-B07-L2 → A08-B07-L1 → A08-B05-L1 → A08-B04-L1 → A08-B03-L1 → A08-B02-L1 → A08-B01-L2 → A09-B07-L1 → A06-B01-L2">A04-B03-L1 → A04-B04-L1 → A04-B05-L1 → A04-B10-L1 → A04-B10-L2 → A08-B10-L1 → A08-B10-L2 → A08-B09-L2 → A08-B08-L2 → A08-B07-L2 → A08-B07-L1 → A08-B05-L1 → A08-B04-L1 → A08-B03-L1 → A08-B02-L1 → A08-B01-L2 → A09-B07-L1 → A06-B01-L2</td></tr><tr data-order="ORD-1010" data-search="ord-1010 a01-b04-l1 → a01-b04-l2 → a01-b07-l1 → a05-b08-l1 → a05-b07-l1 → a05-b06-l1 → a05-b06-l2 → a05-b05-l2 → a05-b02-l1 → a08-b07-l1" onclick="pick('ORD-1010')"><td class="num" data-v="ORD-1010">ORD-1010</td><td class="num r" data-v="10">10</td><td class="num r" data-v="10">10</td><td class="num r" data-v="572.0">572</td><td class="num r" data-v="492.0">492</td><td class="num r" data-v="80.0">80</td><td class="r" data-v="14.0"><span class="minibar"><span style="width:26%"></span></span><span class="pctcell">14.0%</span></td><td class="seq" data-v="ORD-1010" title="A01-B04-L1 → A01-B04-L2 → A01-B07-L1 → A05-B08-L1 → A05-B07-L1 → A05-B06-L1 → A05-B06-L2 → A05-B05-L2 → A05-B02-L1 → A08-B07-L1">A01-B04-L1 → A01-B04-L2 → A01-B07-L1 → A05-B08-L1 → A05-B07-L1 → A05-B06-L1 → A05-B06-L2 → A05-B05-L2 → A05-B02-L1 → A08-B07-L1</td></tr><tr data-order="ORD-1011" data-search="ord-1011 a01-b07-l2 → a09-b09-l1 → a09-b09-l2 → a09-b08-l2 → a09-b05-l2" onclick="pick('ORD-1011')"><td class="num" data-v="ORD-1011">ORD-1011</td><td class="num r" data-v="5">5</td><td class="num r" data-v="5">5</td><td class="num r" data-v="476.0">476</td><td class="num r" data-v="396.0">396</td><td class="num r" data-v="80.0">80</td><td class="r" data-v="16.8"><span class="minibar"><span style="width:31%"></span></span><span class="pctcell">16.8%</span></td><td class="seq" data-v="ORD-1011" title="A01-B07-L2 → A09-B09-L1 → A09-B09-L2 → A09-B08-L2 → A09-B05-L2">A01-B07-L2 → A09-B09-L1 → A09-B09-L2 → A09-B08-L2 → A09-B05-L2</td></tr><tr data-order="ORD-1012" data-search="ord-1012 a08-b10-l2 → a09-b08-l2 → a09-b08-l1 → a09-b05-l1 → a09-b01-l1 → a09-b01-l2" onclick="pick('ORD-1012')"><td class="num" data-v="ORD-1012">ORD-1012</td><td class="num r" data-v="6">6</td><td class="num r" data-v="6">6</td><td class="num r" data-v="536.0">536</td><td class="num r" data-v="396.0">396</td><td class="num r" data-v="140.0">140</td><td class="r" data-v="26.1"><span class="minibar"><span style="width:48%"></span></span><span class="pctcell">26.1%</span></td><td class="seq" data-v="ORD-1012" title="A08-B10-L2 → A09-B08-L2 → A09-B08-L1 → A09-B05-L1 → A09-B01-L1 → A09-B01-L2">A08-B10-L2 → A09-B08-L2 → A09-B08-L1 → A09-B05-L1 → A09-B01-L1 → A09-B01-L2</td></tr><tr data-order="ORD-1013" data-search="ord-1013 a01-b02-l2 → a05-b01-l2 → a05-b04-l1 → a05-b06-l1 → a05-b08-l1 → a08-b09-l1 → a10-b10-l1 → a03-b04-l2" onclick="pick('ORD-1013')"><td class="num" data-v="ORD-1013">ORD-1013</td><td class="num r" data-v="8">8</td><td class="num r" data-v="8">8</td><td class="num r" data-v="500.0">500</td><td class="num r" data-v="460.0">460</td><td class="num r" data-v="40.0">40</td><td class="r" data-v="8.0"><span class="minibar"><span style="width:15%"></span></span><span class="pctcell">8.0%</span></td><td class="seq" data-v="ORD-1013" title="A01-B02-L2 → A05-B01-L2 → A05-B04-L1 → A05-B06-L1 → A05-B08-L1 → A08-B09-L1 → A10-B10-L1 → A03-B04-L2">A01-B02-L2 → A05-B01-L2 → A05-B04-L1 → A05-B06-L1 → A05-B08-L1 → A08-B09-L1 → A10-B10-L1 → A03-B04-L2</td></tr><tr data-order="ORD-1014" data-search="ord-1014 a02-b02-l2 → a02-b03-l2 → a02-b04-l2 → a02-b06-l1 → a02-b09-l1 → a02-b10-l1 → a01-b10-l1 → a07-b09-l2 → a09-b08-l1 → a09-b06-l2 → a09-b04-l1 → a08-b04-l1 → a07-b05-l2 → a03-b02-l1" onclick="pick('ORD-1014')"><td class="num" data-v="ORD-1014">ORD-1014</td><td class="num r" data-v="14">14</td><td class="num r" data-v="14">14</td><td class="num r" data-v="1176.0">1,176</td><td class="num r" data-v="600.0">600</td><td class="num r" data-v="576.0">576</td><td class="r" data-v="49.0"><span class="minibar"><span style="width:90%"></span></span><span class="pctcell">49.0%</span></td><td class="seq" data-v="ORD-1014" title="A02-B02-L2 → A02-B03-L2 → A02-B04-L2 → A02-B06-L1 → A02-B09-L1 → A02-B10-L1 → A01-B10-L1 → A07-B09-L2 → A09-B08-L1 → A09-B06-L2 → A09-B04-L1 → A08-B04-L1 → A07-B05-L2 → A03-B02-L1">A02-B02-L2 → A02-B03-L2 → A02-B04-L2 → A02-B06-L1 → A02-B09-L1 → A02-B10-L1 → A01-B10-L1 → A07-B09-L2 → A09-B08-L1 → A09-B06-L2 → A09-B04-L1 → A08-B04-L1 → A07-B05-L2 → A03-B02-L1</td></tr><tr data-order="ORD-1015" data-search="ord-1015 a01-b06-l1 → a04-b06-l1 → a04-b07-l2 → a04-b09-l1 → a05-b09-l1 → a10-b06-l1 → a07-b09-l2 → a06-b07-l2 → a06-b05-l1 → a06-b04-l1 → a06-b02-l2" onclick="pick('ORD-1015')"><td class="num" data-v="ORD-1015">ORD-1015</td><td class="num r" data-v="11">11</td><td class="num r" data-v="11">11</td><td class="num r" data-v="932.0">932</td><td class="num r" data-v="620.0">620</td><td class="num r" data-v="312.0">312</td><td class="r" data-v="33.5"><span class="minibar"><span style="width:62%"></span></span><span class="pctcell">33.5%</span></td><td class="seq" data-v="ORD-1015" title="A01-B06-L1 → A04-B06-L1 → A04-B07-L2 → A04-B09-L1 → A05-B09-L1 → A10-B06-L1 → A07-B09-L2 → A06-B07-L2 → A06-B05-L1 → A06-B04-L1 → A06-B02-L2">A01-B06-L1 → A04-B06-L1 → A04-B07-L2 → A04-B09-L1 → A05-B09-L1 → A10-B06-L1 → A07-B09-L2 → A06-B07-L2 → A06-B05-L1 → A06-B04-L1 → A06-B02-L2</td></tr><tr data-order="ORD-1016" data-search="ord-1016 a01-b02-l2 → a03-b04-l1 → a02-b09-l1 → a08-b10-l1 → a08-b08-l1 → a08-b08-l2 → a09-b08-l2 → a05-b09-l2 → a05-b08-l1 → a05-b07-l1 → a05-b06-l2 → a05-b05-l2 → a05-b03-l1 → a05-b02-l1 → a06-b02-l1" onclick="pick('ORD-1016')"><td class="num" data-v="ORD-1016">ORD-1016</td><td class="num r" data-v="16">16</td><td class="num r" data-v="15">15</td><td class="num r" data-v="1008.0">1,008</td><td class="num r" data-v="584.0">584</td><td class="num r" data-v="424.0">424</td><td class="r" data-v="42.1"><span class="minibar"><span style="width:78%"></span></span><span class="pctcell">42.1%</span></td><td class="seq" data-v="ORD-1016" title="A01-B02-L2 → A03-B04-L1 → A02-B09-L1 → A08-B10-L1 → A08-B08-L1 → A08-B08-L2 → A09-B08-L2 → A05-B09-L2 → A05-B08-L1 → A05-B07-L1 → A05-B06-L2 → A05-B05-L2 → A05-B03-L1 → A05-B02-L1 → A06-B02-L1">A01-B02-L2 → A03-B04-L1 → A02-B09-L1 → A08-B10-L1 → A08-B08-L1 → A08-B08-L2 → A09-B08-L2 → A05-B09-L2 → A05-B08-L1 → A05-B07-L1 → A05-B06-L2 → A05-B05-L2 → A05-B03-L1 → A05-B02-L1 → A06-B02-L1</td></tr><tr data-order="ORD-1017" data-search="ord-1017 a02-b03-l2 → a02-b07-l2 → a03-b08-l1 → a03-b07-l1 → a03-b07-l2 → a03-b06-l2 → a03-b04-l1 → a03-b04-l2 → a03-b03-l1 → a05-b03-l2 → a07-b01-l1 → a07-b02-l2 → a07-b02-l1 → a07-b03-l1 → a07-b03-l2 → a07-b05-l1 → a07-b06-l1 → a07-b07-l1 → a07-b08-l1 → a07-b09-l1 → a07-b10-l2 → a08-b06-l1 → a09-b01-l2" onclick="pick('ORD-1017')"><td class="num" data-v="ORD-1017">ORD-1017</td><td class="num r" data-v="24">24</td><td class="num r" data-v="23">23</td><td class="num r" data-v="1032.0">1,032</td><td class="num r" data-v="616.0">616</td><td class="num r" data-v="416.0">416</td><td class="r" data-v="40.3"><span class="minibar"><span style="width:74%"></span></span><span class="pctcell">40.3%</span></td><td class="seq" data-v="ORD-1017" title="A02-B03-L2 → A02-B07-L2 → A03-B08-L1 → A03-B07-L1 → A03-B07-L2 → A03-B06-L2 → A03-B04-L1 → A03-B04-L2 → A03-B03-L1 → A05-B03-L2 → A07-B01-L1 → A07-B02-L2 → A07-B02-L1 → A07-B03-L1 → A07-B03-L2 → A07-B05-L1 → A07-B06-L1 → A07-B07-L1 → A07-B08-L1 → A07-B09-L1 → A07-B10-L2 → A08-B06-L1 → A09-B01-L2">A02-B03-L2 → A02-B07-L2 → A03-B08-L1 → A03-B07-L1 → A03-B07-L2 → A03-B06-L2 → A03-B04-L1 → A03-B04-L2 → A03-B03-L1 → A05-B03-L2 → A07-B01-L1 → A07-B02-L2 → A07-B02-L1 → A07-B03-L1 → A07-B03-L2 → A07-B05-L1 → A07-B06-L1 → A07-B07-L1 → A07-B08-L1 → A07-B09-L1 → A07-B10-L2 → A08-B06-L1 → A09-B01-L2</td></tr><tr data-order="ORD-1018" data-search="ord-1018 a02-b08-l2 → a04-b10-l2 → a09-b06-l2 → a08-b10-l1 → a08-b10-l2 → a08-b09-l2 → a08-b09-l1 → a08-b08-l2 → a08-b08-l1 → a08-b07-l1 → a08-b06-l2 → a08-b05-l2 → a08-b05-l1 → a08-b04-l2 → a08-b02-l2 → a08-b02-l1 → a06-b04-l2 → a05-b04-l2" onclick="pick('ORD-1018')"><td class="num" data-v="ORD-1018">ORD-1018</td><td class="num r" data-v="19">19</td><td class="num r" data-v="18">18</td><td class="num r" data-v="904.0">904</td><td class="num r" data-v="596.0">596</td><td class="num r" data-v="308.0">308</td><td class="r" data-v="34.1"><span class="minibar"><span style="width:63%"></span></span><span class="pctcell">34.1%</span></td><td class="seq" data-v="ORD-1018" title="A02-B08-L2 → A04-B10-L2 → A09-B06-L2 → A08-B10-L1 → A08-B10-L2 → A08-B09-L2 → A08-B09-L1 → A08-B08-L2 → A08-B08-L1 → A08-B07-L1 → A08-B06-L2 → A08-B05-L2 → A08-B05-L1 → A08-B04-L2 → A08-B02-L2 → A08-B02-L1 → A06-B04-L2 → A05-B04-L2">A02-B08-L2 → A04-B10-L2 → A09-B06-L2 → A08-B10-L1 → A08-B10-L2 → A08-B09-L2 → A08-B09-L1 → A08-B08-L2 → A08-B08-L1 → A08-B07-L1 → A08-B06-L2 → A08-B05-L2 → A08-B05-L1 → A08-B04-L2 → A08-B02-L2 → A08-B02-L1 → A06-B04-L2 → A05-B04-L2</td></tr><tr data-order="ORD-1019" data-search="ord-1019 a01-b01-l2 → a04-b03-l2 → a05-b02-l2 → a05-b07-l1 → a06-b10-l2 → a06-b07-l1 → a06-b04-l1 → a06-b03-l2 → a06-b02-l1 → a07-b04-l2 → a09-b10-l1 → a09-b08-l2 → a09-b08-l1 → a09-b07-l2 → a09-b07-l1 → a09-b06-l1 → a09-b05-l1 → a09-b04-l1 → a09-b04-l2 → a09-b03-l1 → a09-b03-l2 → a09-b02-l1 → a09-b01-l1" onclick="pick('ORD-1019')"><td class="num" data-v="ORD-1019">ORD-1019</td><td class="num r" data-v="24">24</td><td class="num r" data-v="23">23</td><td class="num r" data-v="1128.0">1,128</td><td class="num r" data-v="616.0">616</td><td class="num r" data-v="512.0">512</td><td class="r" data-v="45.4"><span class="minibar"><span style="width:84%"></span></span><span class="pctcell">45.4%</span></td><td class="seq" data-v="ORD-1019" title="A01-B01-L2 → A04-B03-L2 → A05-B02-L2 → A05-B07-L1 → A06-B10-L2 → A06-B07-L1 → A06-B04-L1 → A06-B03-L2 → A06-B02-L1 → A07-B04-L2 → A09-B10-L1 → A09-B08-L2 → A09-B08-L1 → A09-B07-L2 → A09-B07-L1 → A09-B06-L1 → A09-B05-L1 → A09-B04-L1 → A09-B04-L2 → A09-B03-L1 → A09-B03-L2 → A09-B02-L1 → A09-B01-L1">A01-B01-L2 → A04-B03-L2 → A05-B02-L2 → A05-B07-L1 → A06-B10-L2 → A06-B07-L1 → A06-B04-L1 → A06-B03-L2 → A06-B02-L1 → A07-B04-L2 → A09-B10-L1 → A09-B08-L2 → A09-B08-L1 → A09-B07-L2 → A09-B07-L1 → A09-B06-L1 → A09-B05-L1 → A09-B04-L1 → A09-B04-L2 → A09-B03-L1 → A09-B03-L2 → A09-B02-L1 → A09-B01-L1</td></tr><tr data-order="ORD-1020" data-search="ord-1020 a02-b04-l1 → a02-b08-l2 → a03-b08-l2 → a03-b07-l2 → a03-b04-l2 → a03-b03-l1 → a03-b01-l2 → a03-b01-l1 → a06-b03-l1 → a08-b01-l1 → a08-b02-l1 → a08-b02-l2 → a08-b03-l1 → a08-b03-l2 → a08-b04-l2 → a08-b05-l1 → a08-b05-l2 → a08-b06-l2 → a08-b07-l1 → a08-b07-l2 → a08-b09-l1 → a08-b09-l2 → a07-b07-l2 → a07-b06-l2 → a07-b05-l1" onclick="pick('ORD-1020')"><td class="num" data-v="ORD-1020">ORD-1020</td><td class="num r" data-v="25">25</td><td class="num r" data-v="25">25</td><td class="num r" data-v="1136.0">1,136</td><td class="num r" data-v="592.0">592</td><td class="num r" data-v="544.0">544</td><td class="r" data-v="47.9"><span class="minibar"><span style="width:88%"></span></span><span class="pctcell">47.9%</span></td><td class="seq" data-v="ORD-1020" title="A02-B04-L1 → A02-B08-L2 → A03-B08-L2 → A03-B07-L2 → A03-B04-L2 → A03-B03-L1 → A03-B01-L2 → A03-B01-L1 → A06-B03-L1 → A08-B01-L1 → A08-B02-L1 → A08-B02-L2 → A08-B03-L1 → A08-B03-L2 → A08-B04-L2 → A08-B05-L1 → A08-B05-L2 → A08-B06-L2 → A08-B07-L1 → A08-B07-L2 → A08-B09-L1 → A08-B09-L2 → A07-B07-L2 → A07-B06-L2 → A07-B05-L1">A02-B04-L1 → A02-B08-L2 → A03-B08-L2 → A03-B07-L2 → A03-B04-L2 → A03-B03-L1 → A03-B01-L2 → A03-B01-L1 → A06-B03-L1 → A08-B01-L1 → A08-B02-L1 → A08-B02-L2 → A08-B03-L1 → A08-B03-L2 → A08-B04-L2 → A08-B05-L1 → A08-B05-L2 → A08-B06-L2 → A08-B07-L1 → A08-B07-L2 → A08-B09-L1 → A08-B09-L2 → A07-B07-L2 → A07-B06-L2 → A07-B05-L1</td></tr></tbody>
+      </table>
+    </div>
+    <div class="caption">Click any column to sort, any row to draw it on the map. Type a
+    slot label such as <span class="num">A03</span> to find every order that visits it.</div>
+  </div>
+</div>
+
+<footer>
+  <h3>What this measures, and what it does not</h3>
+  <ul>
+    <li>Travel distance only. Pick time, mast raise and lower, scanning,
+        congestion, queueing at the dock and put-away are not in it.</li>
+    <li>Routes start and end at <span class="num">STAGING</span>.
+        Cross-aisles at the front and back only.</li>
+    <li>Level does not change travel distance - the truck stands in the same spot
+        whether the pallet is at floor level or six beams up. Mast time is real and
+        is not measured here.</li>
+    <li>Every figure on this page is computed from the two CSV files at run time.
+        None are hard-coded.</li>
+  </ul>
+</footer>
+
+</div>
+<script>/* pickpath_engine.js — a JavaScript mirror of pick_path.py + make_dashboard.py.
+
+Why this exists: the "upload your own CSV" button has to compute results in the
+browser, with no server and no network call — that is the whole point of the
+privacy pitch. There is no way to shell out to the Python file from a static
+HTML page, so the distance model and route builder are re-implemented here.
+
+KEEP THIS IN SYNC WITH pick_path.py BY HAND. Every function below names the
+Python function it mirrors in its comment. If you change the distance model,
+the route builder, or the CSV-reading rules in pick_path.py, make the same
+change here — a browser engine that quietly disagrees with the CLI is worse
+than no browser engine at all.
+
+Fidelity notes (JS vs Python, both use IEEE-754 doubles so arithmetic itself
+does not drift — these are about parsing/formatting, not the maths):
+  - int(float(x)) truncates toward zero -> Math.trunc(parseFloat(x)) here.
+  - sorted(x) on strings compares by code point -> codePointCompare() here,
+    never localeCompare, so no locale can reorder an order_id.
+  - `row["field"] or 0` treats "" as falsy, any other string (even "0") as
+    truthy -> orZero() here does the same.
+
+VERIFIED, NOT ASSUMED: this file's computed results are checked byte-for-byte
+against pick_path.py's output for the sample data (results.csv, every SVG
+fragment, every table row) as part of this repo's test suite. Run
+test_pickpath_engine.js (needs Node) to see the checks yourself.
+*/
+
+const EPSILON = 1e-9;
+const DEPOT_LOCATION_ID = "STAGING";
+
+// ---------------------------------------------------------------------------
+// CSV parsing — a real RFC4180 reader, not split(','), so a quoted field
+// containing a comma does not silently misparse. Mirrors csv.DictReader.
+// ---------------------------------------------------------------------------
+
+function parseCSV(text) {
+  // Strip a UTF-8 BOM, same as Python's encoding="utf-8-sig".
+  if (text.charCodeAt(0) === 0xFEFF) text = text.slice(1);
+
+  const rows = [];
+  let row = [], field = "", inQuotes = false;
+  let i = 0;
+  const n = text.length;
+
+  function endField() { row.push(field); field = ""; }
+  function endRow() { endField(); rows.push(row); row = []; }
+
+  while (i < n) {
+    const c = text[i];
+    if (inQuotes) {
+      if (c === '"') {
+        if (text[i + 1] === '"') { field += '"'; i += 2; continue; }
+        inQuotes = false; i++; continue;
+      }
+      field += c; i++; continue;
+    }
+    if (c === '"') { inQuotes = true; i++; continue; }
+    if (c === ',') { endField(); i++; continue; }
+    if (c === '\r') { i++; continue; }              // normalise CRLF
+    if (c === '\n') { endRow(); i++; continue; }
+    field += c; i++;
+  }
+  // Last line may have no trailing newline.
+  if (field.length > 0 || row.length > 0) endRow();
+
+  // Drop fully-blank trailing rows (a trailing newline produces one).
+  while (rows.length && rows[rows.length - 1].length === 1 && rows[rows.length - 1][0] === "") {
+    rows.pop();
+  }
+  if (rows.length === 0) return { header: [], records: [] };
+
+  const header = rows[0];
+  const records = rows.slice(1).map(r => {
+    const obj = {};
+    header.forEach((h, idx) => { obj[h] = r[idx] !== undefined ? r[idx] : ""; });
+    return obj;
+  });
+  return { header, records };
+}
+
+// ---------------------------------------------------------------------------
+// Column matching — mirrors _require_columns() / _column_lookup() in
+// pick_path.py: presence is checked case-insensitively, and lookups go
+// through the same map so a header of "Location_ID" works correctly rather
+// than silently failing later.
+// ---------------------------------------------------------------------------
+
+class ColumnError extends Error {
+  constructor(missing, found) {
+    super(`Missing required column(s): ${missing.join(", ")}`);
+    this.missing = missing;
+    this.found = found;
+  }
+}
+
+function columnLookup(header, needed) {
+  const have = new Map(header.map(h => [h.trim().toLowerCase(), h]));
+  const missing = needed.filter(name => !have.has(name));
+  if (missing.length) throw new ColumnError(missing, header);
+  const field = {};
+  needed.forEach(name => { field[name] = have.get(name); });
+  return field;
+}
+
+function orZero(raw) {
+  // Mirrors Python's `row["x"] or 0`: empty string is falsy, anything else
+  // (including the literal string "0") passes through unchanged.
+  return raw && raw.length ? raw : "0";
+}
+
+const NUMBER_RE = /^\s*[+-]?(\d+\.?\d*|\.\d+)([eE][+-]?\d+)?\s*$/;
+
+function requireFloat(raw, context) {
+  if (raw === undefined || !NUMBER_RE.test(raw)) {
+    throw new Error(`${context}: could not read a number (got ${JSON.stringify(raw)})`);
+  }
+  return parseFloat(raw);
+}
+
+function truncInt(raw, context) {
+  return Math.trunc(requireFloat(orZero(raw), context));
+}
+
+function codePointCompare(a, b) {
+  // Python's default string comparison is by code point. localeCompare is
+  // locale-sensitive and must never be used here - it can reorder order IDs.
+  return a < b ? -1 : (a > b ? 1 : 0);
+}
+
+// ---------------------------------------------------------------------------
+// Reading the input files — mirrors read_locations() / read_orders().
+// ---------------------------------------------------------------------------
+
+function readLocations(text, filename) {
+  const { header, records } = parseCSV(text);
+  const field = columnLookup(header, ["location_id", "aisle", "bay", "level", "x", "y"]);
+
+  const locations = new Map();
+  records.forEach((row, idx) => {
+    const rowNo = idx + 2;
+    const locId = (row[field.location_id] || "").trim();
+    if (!locId) return;                              // blank padding row
+    const ctx = `${filename} line ${rowNo}`;
+    locations.set(locId, {
+      location_id: locId,
+      aisle: truncInt(row[field.aisle], ctx),
+      bay: truncInt(row[field.bay], ctx),
+      level: truncInt(row[field.level], ctx),
+      x: requireFloat(row[field.x], ctx),
+      y: requireFloat(row[field.y], ctx),
+    });
+  });
+
+  if (locations.size === 0) throw new Error(`${filename} contained no usable rows.`);
+  return locations;
+}
+
+function readOrders(text, filename) {
+  const { header, records } = parseCSV(text);
+  const field = columnLookup(header, ["order_id", "line", "location_id", "sku", "qty"]);
+
+  const orders = new Map();
+  records.forEach((row, idx) => {
+    const rowNo = idx + 2;
+    const orderId = (row[field.order_id] || "").trim();
+    const locId = (row[field.location_id] || "").trim();
+    if (!orderId || !locId) return;
+    const ctx = `${filename} line ${rowNo}`;
+    const line = {
+      order_id: orderId,
+      line: truncInt(row[field.line], ctx),
+      location_id: locId,
+      sku: (row[field.sku] || "").trim(),
+      qty: requireFloat(orZero(row[field.qty]), ctx),
+    };
+    if (!orders.has(orderId)) orders.set(orderId, []);
+    orders.get(orderId).push(line);
+  });
+
+  orders.forEach(lines => lines.sort((a, b) => a.line - b.line));
+  if (orders.size === 0) throw new Error(`${filename} contained no usable rows.`);
+  return orders;
+}
+
+// ---------------------------------------------------------------------------
+// The warehouse and its distance model — mirrors class Warehouse.
+// ---------------------------------------------------------------------------
+
+function makeWarehouse(locations) {
+  const ys = Array.from(locations.values(), l => l.y);
+  const frontY = Math.min(...ys);
+  const backY = Math.max(...ys);
+
+  let depotId;
+  if (locations.has(DEPOT_LOCATION_ID)) {
+    depotId = DEPOT_LOCATION_ID;
+  } else {
+    let corner = null;
+    for (const loc of locations.values()) {
+      if (!corner || loc.y < corner.y || (loc.y === corner.y && loc.x < corner.x)) corner = loc;
+    }
+    depotId = corner.location_id;
+  }
+
+  function distance(fromId, toId) {
+    const a = locations.get(fromId), b = locations.get(toId);
+    if (a.aisle === b.aisle) return Math.abs(a.y - b.y);
+    const across = Math.abs(a.x - b.x);
+    const outFront = (a.y - frontY) + (b.y - frontY);
+    const outBack = (backY - a.y) + (backY - b.y);
+    return across + Math.min(outFront, outBack);
+  }
+
+  function routeDistance(sequence) {
+    const route = [depotId, ...sequence, depotId];
+    let total = 0;
+    for (let i = 0; i < route.length - 1; i++) total += distance(route[i], route[i + 1]);
+    return total;
+  }
+
+  function pickSlotCount() {
+    let n = 0;
+    for (const id of locations.keys()) if (id !== depotId) n++;
+    return n;
+  }
+
+  function aisleCount() {
+    const seen = new Set();
+    for (const [id, loc] of locations) if (id !== depotId) seen.add(loc.aisle);
+    return seen.size;
+  }
+
+  return { locations, frontY, backY, depotId, distance, routeDistance, pickSlotCount, aisleCount };
+}
+
+// ---------------------------------------------------------------------------
+// Route construction — mirrors serpentine_sequence / nearest_neighbour_sequence / two_opt.
+// ---------------------------------------------------------------------------
+
+function serpentineSequence(wh, stops) {
+  const byAisle = new Map();
+  stops.forEach(stop => {
+    const aisle = wh.locations.get(stop).aisle;
+    if (!byAisle.has(aisle)) byAisle.set(aisle, []);
+    byAisle.get(aisle).push(stop);
+  });
+
+  const aisleOrder = Array.from(byAisle.keys()).sort((a, b) => {
+    const ax = Math.min(...byAisle.get(a).map(s => wh.locations.get(s).x));
+    const bx = Math.min(...byAisle.get(b).map(s => wh.locations.get(s).x));
+    return ax - bx;
+  });
+
+  const sequence = [];
+  aisleOrder.forEach((aisle, index) => {
+    const goingBack = index % 2 === 0;
+    const sorted = byAisle.get(aisle).slice().sort((s1, s2) => {
+      const d = wh.locations.get(s1).y - wh.locations.get(s2).y;
+      return goingBack ? d : -d;
+    });
+    sequence.push(...sorted);
+  });
+  return sequence;
+}
+
+function nearestNeighbourSequence(wh, stops) {
+  const remaining = stops.slice();
+  const sequence = [];
+  let current = wh.depotId;
+  while (remaining.length) {
+    let bestIdx = 0, bestDist = Infinity;
+    for (let i = 0; i < remaining.length; i++) {
+      const d = wh.distance(current, remaining[i]);
+      if (d < bestDist) { bestDist = d; bestIdx = i; }
+    }
+    const nearest = remaining.splice(bestIdx, 1)[0];
+    sequence.push(nearest);
+    current = nearest;
+  }
+  return sequence;
+}
+
+function twoOpt(wh, sequence) {
+  const route = [wh.depotId, ...sequence, wh.depotId];
+  let improved = true;
+  while (improved) {
+    improved = false;
+    for (let i = 1; i < route.length - 2; i++) {
+      for (let j = i + 1; j < route.length - 1; j++) {
+        const a = route[i - 1], b = route[i], c = route[j], d = route[j + 1];
+        const before = wh.distance(a, b) + wh.distance(c, d);
+        const after = wh.distance(a, c) + wh.distance(b, d);
+        if (after < before - EPSILON) {
+          const seg = route.slice(i, j + 1).reverse();
+          route.splice(i, seg.length, ...seg);
+          improved = true;
+        }
+      }
+    }
+  }
+  return route.slice(1, -1);
+}
+
+function optimizeOrder(wh, lines) {
+  const baselineSequence = lines.map(l => l.location_id);
+  const baselineDistance = wh.routeDistance(baselineSequence);
+
+  const stops = [];
+  const seen = new Set();
+  baselineSequence.forEach(id => { if (!seen.has(id)) { seen.add(id); stops.push(id); } });
+
+  const candidates = [
+    twoOpt(wh, serpentineSequence(wh, stops)),
+    twoOpt(wh, nearestNeighbourSequence(wh, stops)),
+  ];
+  let best = candidates[0], bestDist = wh.routeDistance(candidates[0]);
+  for (let i = 1; i < candidates.length; i++) {
+    const d = wh.routeDistance(candidates[i]);
+    if (d < bestDist) { best = candidates[i]; bestDist = d; }
+  }
+
+  const optimizedDistance = wh.routeDistance(best);
+  const saved = baselineDistance - optimizedDistance;
+  const pct = baselineDistance <= EPSILON ? 0.0 : (100.0 * saved / baselineDistance);
+
+  return {
+    order_id: lines[0].order_id,
+    line_count: lines.length,
+    baseline_stops: baselineSequence.length,
+    optimized_stops: best.length,
+    baseline_distance: baselineDistance,
+    optimized_distance: optimizedDistance,
+    optimized_sequence: best,
+    saved, pct_improvement: pct,
+  };
+}
+
+// ---------------------------------------------------------------------------
+// Waypoints for drawing — mirrors travel_waypoints() / route_waypoints().
+// ---------------------------------------------------------------------------
+
+function travelWaypoints(wh, fromId, toId) {
+  const a = wh.locations.get(fromId), b = wh.locations.get(toId);
+  if (a.aisle === b.aisle) return [[a.x, a.y], [b.x, b.y]];
+  const outFront = (a.y - wh.frontY) + (b.y - wh.frontY);
+  const outBack = (wh.backY - a.y) + (wh.backY - b.y);
+  const crossY = outFront <= outBack ? wh.frontY : wh.backY;
+  return [[a.x, a.y], [a.x, crossY], [b.x, crossY], [b.x, b.y]];
+}
+
+function routeWaypoints(wh, sequence) {
+  const full = [wh.depotId, ...sequence, wh.depotId];
+  const points = [];
+  for (let i = 0; i < full.length - 1; i++) {
+    const leg = travelWaypoints(wh, full[i], full[i + 1]);
+    points.push(...(i === 0 ? leg : leg.slice(1)));
+  }
+  return points;
+}
+
+// ---------------------------------------------------------------------------
+// Full run — mirrors main()'s middle section: read, join-check, optimize all.
+// ---------------------------------------------------------------------------
+
+class JoinError extends Error {
+  constructor(missing) {
+    super(`${missing.length} location_id(s) in the orders file are not in the locations file`);
+    this.missing = missing;
+  }
+}
+
+function runPickPath(locationsText, locationsName, ordersText, ordersName) {
+  const locations = readLocations(locationsText, locationsName);
+  const orders = readOrders(ordersText, ordersName);
+  const wh = makeWarehouse(locations);
+
+  const missing = new Set();
+  for (const lines of orders.values()) {
+    for (const line of lines) if (!locations.has(line.location_id)) missing.add(line.location_id);
+  }
+  if (missing.size) {
+    throw new JoinError(Array.from(missing).sort(codePointCompare));
+  }
+
+  const orderIds = Array.from(orders.keys()).sort(codePointCompare);
+  const results = orderIds.map(id => optimizeOrder(wh, orders.get(id)));
+
+  return { warehouse: wh, orders, results };
+}
+
+// ---------------------------------------------------------------------------
+// Drawing — mirrors FloorPlan / rack_blocks / svg_floor / svg_route / svg_stops
+// in make_dashboard.py. Pure string builders; same output shape as the
+// Python-generated markup so the existing pick()/sortBy()/filt() JS (which
+// was written against that markup) keeps working unmodified after a re-render.
+// ---------------------------------------------------------------------------
+
+const CORRIDOR_FRACTION = 0.22;
+const MAP_WIDTH = 1080.0;
+const MAP_MARGIN = 40.0;
+
+function escapeHtml(s, quote) {
+  // Mirrors Python's html.escape(s, quote=...).
+  let out = String(s).replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;");
+  if (quote) out = out.replace(/"/g, "&quot;").replace(/'/g, "&#x27;");
+  return out;
+}
+
+function buildFloorPlan(wh) {
+  const xs = Array.from(wh.locations.values(), l => l.x);
+  const ys = Array.from(wh.locations.values(), l => l.y);
+  const minX = Math.min(...xs), maxX = Math.max(...xs);
+  const minY = Math.min(...ys), maxY = Math.max(...ys);
+  const spanX = Math.max(maxX - minX, 1.0);
+  const spanY = Math.max(maxY - minY, 1.0);
+  const scale = (MAP_WIDTH - 2 * MAP_MARGIN) / spanX;
+  const height = spanY * scale + 2 * MAP_MARGIN;
+
+  const plan = {
+    warehouse: wh, minX, maxX, minY, maxY, scale, height, width: MAP_WIDTH,
+    sx(x) { return MAP_MARGIN + (x - minX) * scale; },
+    sy(y) { return height - MAP_MARGIN - (y - minY) * scale; },
+    aisleColumns() {
+      const seen = new Map();
+      for (const [id, loc] of wh.locations) {
+        if (id === wh.depotId) continue;
+        if (!seen.has(loc.aisle)) seen.set(loc.aisle, loc.x);
+      }
+      return Array.from(seen.entries()).sort((a, b) => a[1] - b[1]);
+    },
+  };
+  return plan;
+}
+
+function rackBlocks(plan) {
+  const columns = plan.aisleColumns().map(([, x]) => x);
+  if (columns.length < 2) return [];
+  const gaps = [];
+  for (let i = 0; i < columns.length - 1; i++) gaps.push(columns[i + 1] - columns[i]);
+  const corridor = Math.min(...gaps) * CORRIDOR_FRACTION;
+  const blocks = [];
+  for (let i = 0; i < columns.length - 1; i++) {
+    const left = columns[i] + corridor, right = columns[i + 1] - corridor;
+    if (right > left) blocks.push([left, right]);
+  }
+  return blocks;
+}
+
+function svgFloor(plan) {
+  const wh = plan.warehouse;
+  const parts = [];
+  const depth = plan.maxY - plan.minY;
+  const inset = depth * 0.03;
+
+  const band = Math.max(plan.scale * (depth * 0.045), 9.0);
+  for (const [label, yAt] of [["FRONT CROSS-AISLE", plan.minY], ["BACK CROSS-AISLE", plan.maxY]]) {
+    const cy = plan.sy(yAt);
+    parts.push(`<rect class="crossaisle" x="${plan.sx(plan.minX).toFixed(1)}" y="${(cy - band / 2).toFixed(1)}" ` +
+      `width="${((plan.maxX - plan.minX) * plan.scale).toFixed(1)}" height="${band.toFixed(1)}" rx="2"/>`);
+    parts.push(`<text class="bandlabel" x="${plan.sx(plan.maxX).toFixed(1)}" ` +
+      `y="${(cy - band / 2 - 5).toFixed(1)}" text-anchor="end">${label}</text>`);
+  }
+
+  const top = plan.sy(plan.maxY - inset), bottom = plan.sy(plan.minY + inset);
+  for (const [left, right] of rackBlocks(plan)) {
+    parts.push(`<rect class="rack" x="${plan.sx(left).toFixed(1)}" y="${top.toFixed(1)}" ` +
+      `width="${((right - left) * plan.scale).toFixed(1)}" height="${(bottom - top).toFixed(1)}" rx="2"/>`);
+  }
+
+  for (const [aisle, x] of plan.aisleColumns()) {
+    parts.push(`<text class="aislelabel" x="${plan.sx(x).toFixed(1)}" ` +
+      `y="${(plan.height - MAP_MARGIN + 20).toFixed(1)}" text-anchor="middle">${aisle}</text>`);
+  }
+
+  const depot = wh.locations.get(wh.depotId);
+  const dx = plan.sx(depot.x), dy = plan.sy(depot.y);
+  parts.push(`<rect class="depot" x="${(dx - 9).toFixed(1)}" y="${(dy - 9).toFixed(1)}" width="18" height="18" rx="3"/>`);
+  parts.push(`<text class="depotlabel" x="${dx.toFixed(1)}" y="${(dy + 26).toFixed(1)}" text-anchor="middle">` +
+    `${escapeHtml(wh.depotId)}</text>`);
+  return parts.join("\n");
+}
+
+function svgRoute(plan, points, cssClass) {
+  const coords = points.map(([x, y]) => `${plan.sx(x).toFixed(1)},${plan.sy(y).toFixed(1)}`).join(" ");
+  return `<polyline class="${cssClass}" points="${coords}"/>`;
+}
+
+function svgStops(plan, wh, sequence) {
+  const parts = [];
+  sequence.forEach((locId, i) => {
+    const index = i + 1;
+    const loc = wh.locations.get(locId);
+    const cx = plan.sx(loc.x), cy = plan.sy(loc.y);
+    parts.push(`<g class="stop"><title>${escapeHtml(locId)} - stop ${index}</title>` +
+      `<circle cx="${cx.toFixed(1)}" cy="${cy.toFixed(1)}" r="8.5"/>` +
+      `<text x="${cx.toFixed(1)}" y="${(cy + 3.1).toFixed(1)}" text-anchor="middle">${index}</text></g>`);
+  });
+  return parts.join("");
+}
+
+function buildRouteGroup(plan, wh, orderId, baselineSeq, optSeq) {
+  const wasPts = routeWaypoints(wh, baselineSeq);
+  const nowPts = routeWaypoints(wh, optSeq);
+  return `<g class="route" data-order="${escapeHtml(orderId)}">`
+    + svgRoute(plan, wasPts, "was")
+    + svgRoute(plan, nowPts, "now")
+    + svgStops(plan, wh, optSeq)
+    + "</g>";
+}
+
+function fmtInt(n) {
+  // Mirrors Python's f"{n:,.0f}" - thousands separators, no decimals.
+  return Math.round(n).toLocaleString("en-US");
+}
+
+function buildTableRow(result, bestPct) {
+  const oid = escapeHtml(result.order_id);
+  const sequence = result.optimized_sequence.join(" → ");
+  const haystack = escapeHtml((result.order_id + " " + sequence).toLowerCase(), true);
+  const barW = bestPct > 0 ? 100.0 * result.pct_improvement / bestPct : 0.0;
+  return `<tr data-order="${oid}" data-search="${haystack}" onclick="pick('${oid}')">`
+    + `<td class="num" data-v="${oid}">${oid}</td>`
+    + `<td class="num r" data-v="${result.line_count}">${result.line_count}</td>`
+    + `<td class="num r" data-v="${result.optimized_stops}">${result.optimized_stops}</td>`
+    + `<td class="num r" data-v="${result.baseline_distance.toFixed(1)}">${fmtInt(result.baseline_distance)}</td>`
+    + `<td class="num r" data-v="${result.optimized_distance.toFixed(1)}">${fmtInt(result.optimized_distance)}</td>`
+    + `<td class="num r" data-v="${result.saved.toFixed(1)}">${fmtInt(result.saved)}</td>`
+    + `<td class="r" data-v="${result.pct_improvement.toFixed(1)}">`
+    + `<span class="minibar"><span style="width:${barW.toFixed(0)}%"></span></span>`
+    + `<span class="pctcell">${result.pct_improvement.toFixed(1)}%</span></td>`
+    + `<td class="seq" data-v="${oid}" title="${escapeHtml(sequence, true)}">${escapeHtml(sequence)}</td>`
+    + `</tr>`;
+}
+
+if (typeof module !== "undefined") {
+  module.exports = {
+    parseCSV, ColumnError, JoinError, readLocations, readOrders, makeWarehouse,
+    serpentineSequence, nearestNeighbourSequence, twoOpt, optimizeOrder,
+    travelWaypoints, routeWaypoints, runPickPath, codePointCompare,
+    buildFloorPlan, rackBlocks, svgFloor, svgRoute, svgStops, buildRouteGroup,
+    buildTableRow, escapeHtml, fmtInt,
+  };
+}
+
+
+var DATA = {"ORD-1001": {"lines": 13, "stops": 12, "was": "876", "now": "696", "saved": "180", "pct": "20.5"}, "ORD-1002": {"lines": 9, "stops": 9, "was": "828", "now": "640", "saved": "188", "pct": "22.7"}, "ORD-1003": {"lines": 25, "stops": 24, "was": "1,244", "now": "684", "saved": "560", "pct": "45.0"}, "ORD-1004": {"lines": 18, "stops": 17, "was": "1,088", "now": "600", "saved": "488", "pct": "44.9"}, "ORD-1005": {"lines": 16, "stops": 16, "was": "1,040", "now": "676", "saved": "364", "pct": "35.0"}, "ORD-1006": {"lines": 20, "stops": 20, "was": "1,396", "now": "640", "saved": "756", "pct": "54.2"}, "ORD-1007": {"lines": 25, "stops": 23, "was": "940", "now": "720", "saved": "220", "pct": "23.4"}, "ORD-1008": {"lines": 18, "stops": 18, "was": "844", "now": "540", "saved": "304", "pct": "36.0"}, "ORD-1009": {"lines": 19, "stops": 18, "was": "932", "now": "516", "saved": "416", "pct": "44.6"}, "ORD-1010": {"lines": 10, "stops": 10, "was": "572", "now": "492", "saved": "80", "pct": "14.0"}, "ORD-1011": {"lines": 5, "stops": 5, "was": "476", "now": "396", "saved": "80", "pct": "16.8"}, "ORD-1012": {"lines": 6, "stops": 6, "was": "536", "now": "396", "saved": "140", "pct": "26.1"}, "ORD-1013": {"lines": 8, "stops": 8, "was": "500", "now": "460", "saved": "40", "pct": "8.0"}, "ORD-1014": {"lines": 14, "stops": 14, "was": "1,176", "now": "600", "saved": "576", "pct": "49.0"}, "ORD-1015": {"lines": 11, "stops": 11, "was": "932", "now": "620", "saved": "312", "pct": "33.5"}, "ORD-1016": {"lines": 16, "stops": 15, "was": "1,008", "now": "584", "saved": "424", "pct": "42.1"}, "ORD-1017": {"lines": 24, "stops": 23, "was": "1,032", "now": "616", "saved": "416", "pct": "40.3"}, "ORD-1018": {"lines": 19, "stops": 18, "was": "904", "now": "596", "saved": "308", "pct": "34.1"}, "ORD-1019": {"lines": 24, "stops": 23, "was": "1,128", "now": "616", "saved": "512", "pct": "45.4"}, "ORD-1020": {"lines": 25, "stops": 25, "was": "1,136", "now": "592", "saved": "544", "pct": "47.9"}};
+
+// Draw one order's routes on the map and highlight its row in the table.
+function pick(id){
+  var i;
+  var routes = document.querySelectorAll('.route');
+  for(i=0;i<routes.length;i++){
+    routes[i].classList.toggle('on', routes[i].getAttribute('data-order') === id);
+  }
+  var rows = document.querySelectorAll('tbody tr');
+  for(i=0;i<rows.length;i++){
+    rows[i].classList.toggle('sel', rows[i].getAttribute('data-order') === id);
+  }
+  var d = DATA[id];
+  document.getElementById('cap').innerHTML =
+    '<b>' + id + '</b> - ' + d.lines + ' lines, ' + d.stops + ' stops. '
+    + 'As issued <b>' + d.was + ' ft</b>, optimized <b>' + d.now + ' ft</b>, '
+    + 'saving <b>' + d.saved + ' ft</b> (' + d.pct + '%).';
+}
+
+// Switch which routes the map draws.
+function mode(m, btn){
+  document.getElementById('map').setAttribute('data-mode', m);
+  var b = document.querySelectorAll('.toggle button');
+  for(var i=0;i<b.length;i++){ b[i].setAttribute('aria-pressed', b[i]===btn ? 'true':'false'); }
+}
+
+// Sort the results table by a column. Numbers sort as numbers, text as text.
+function sortBy(th){
+  var idx = +th.getAttribute('data-col');
+  var dir = th.getAttribute('data-dir') === 'asc' ? -1 : 1;
+  var heads = document.querySelectorAll('thead th');
+  for(var i=0;i<heads.length;i++){ heads[i].removeAttribute('data-dir'); }
+  th.setAttribute('data-dir', dir === 1 ? 'asc' : 'desc');
+
+  var body = document.getElementById('tbody');
+  var rows = Array.prototype.slice.call(body.querySelectorAll('tr'));
+  rows.sort(function(a, b){
+    var av = a.children[idx].getAttribute('data-v');
+    var bv = b.children[idx].getAttribute('data-v');
+    var an = parseFloat(av), bn = parseFloat(bv);
+    if(!isNaN(an) && !isNaN(bn)){ return (an - bn) * dir; }
+    return av.localeCompare(bv) * dir;
+  });
+  for(var j=0;j<rows.length;j++){ body.appendChild(rows[j]); }
+}
+
+// Filter rows by order id or slot label. Empty box shows everything.
+function filt(q){
+  q = (q || '').toLowerCase().trim();
+  var rows = document.querySelectorAll('#tbody tr');
+  var shown = 0;
+  for(var i=0;i<rows.length;i++){
+    var hit = q === '' || rows[i].getAttribute('data-search').indexOf(q) >= 0;
+    rows[i].style.display = hit ? '' : 'none';
+    if(hit){ shown++; }
+  }
+  document.getElementById('shown').textContent = shown;
+}
+
+// ---------------------------------------------------------------------------
+// Upload your own data. Everything below runs entirely in this browser tab -
+// pickpath_engine.js (embedded above) does the reading, the optimizing and
+// the SVG/table building, the same functions this page's own generation
+// script used to build the view you saw on load. No network call is made
+// anywhere in this file; that is the whole point of shipping it this way.
+// ---------------------------------------------------------------------------
+
+var SAMPLE = {"locations": "location_id,aisle,bay,level,x,y\nSTAGING,0,0,0,-12.0,0.0\nA01-B01-L1,1,1,1,0.0,0.0\nA01-B01-L2,1,1,2,0.0,0.0\nA01-B02-L1,1,2,1,0.0,10.0\nA01-B02-L2,1,2,2,0.0,10.0\nA01-B03-L1,1,3,1,0.0,20.0\nA01-B03-L2,1,3,2,0.0,20.0\nA01-B04-L1,1,4,1,0.0,30.0\nA01-B04-L2,1,4,2,0.0,30.0\nA01-B05-L1,1,5,1,0.0,40.0\nA01-B05-L2,1,5,2,0.0,40.0\nA01-B06-L1,1,6,1,0.0,50.0\nA01-B06-L2,1,6,2,0.0,50.0\nA01-B07-L1,1,7,1,0.0,60.0\nA01-B07-L2,1,7,2,0.0,60.0\nA01-B08-L1,1,8,1,0.0,70.0\nA01-B08-L2,1,8,2,0.0,70.0\nA01-B09-L1,1,9,1,0.0,80.0\nA01-B09-L2,1,9,2,0.0,80.0\nA01-B10-L1,1,10,1,0.0,90.0\nA01-B10-L2,1,10,2,0.0,90.0\nA02-B01-L1,2,1,1,12.0,0.0\nA02-B01-L2,2,1,2,12.0,0.0\nA02-B02-L1,2,2,1,12.0,10.0\nA02-B02-L2,2,2,2,12.0,10.0\nA02-B03-L1,2,3,1,12.0,20.0\nA02-B03-L2,2,3,2,12.0,20.0\nA02-B04-L1,2,4,1,12.0,30.0\nA02-B04-L2,2,4,2,12.0,30.0\nA02-B05-L1,2,5,1,12.0,40.0\nA02-B05-L2,2,5,2,12.0,40.0\nA02-B06-L1,2,6,1,12.0,50.0\nA02-B06-L2,2,6,2,12.0,50.0\nA02-B07-L1,2,7,1,12.0,60.0\nA02-B07-L2,2,7,2,12.0,60.0\nA02-B08-L1,2,8,1,12.0,70.0\nA02-B08-L2,2,8,2,12.0,70.0\nA02-B09-L1,2,9,1,12.0,80.0\nA02-B09-L2,2,9,2,12.0,80.0\nA02-B10-L1,2,10,1,12.0,90.0\nA02-B10-L2,2,10,2,12.0,90.0\nA03-B01-L1,3,1,1,24.0,0.0\nA03-B01-L2,3,1,2,24.0,0.0\nA03-B02-L1,3,2,1,24.0,10.0\nA03-B02-L2,3,2,2,24.0,10.0\nA03-B03-L1,3,3,1,24.0,20.0\nA03-B03-L2,3,3,2,24.0,20.0\nA03-B04-L1,3,4,1,24.0,30.0\nA03-B04-L2,3,4,2,24.0,30.0\nA03-B05-L1,3,5,1,24.0,40.0\nA03-B05-L2,3,5,2,24.0,40.0\nA03-B06-L1,3,6,1,24.0,50.0\nA03-B06-L2,3,6,2,24.0,50.0\nA03-B07-L1,3,7,1,24.0,60.0\nA03-B07-L2,3,7,2,24.0,60.0\nA03-B08-L1,3,8,1,24.0,70.0\nA03-B08-L2,3,8,2,24.0,70.0\nA03-B09-L1,3,9,1,24.0,80.0\nA03-B09-L2,3,9,2,24.0,80.0\nA03-B10-L1,3,10,1,24.0,90.0\nA03-B10-L2,3,10,2,24.0,90.0\nA04-B01-L1,4,1,1,36.0,0.0\nA04-B01-L2,4,1,2,36.0,0.0\nA04-B02-L1,4,2,1,36.0,10.0\nA04-B02-L2,4,2,2,36.0,10.0\nA04-B03-L1,4,3,1,36.0,20.0\nA04-B03-L2,4,3,2,36.0,20.0\nA04-B04-L1,4,4,1,36.0,30.0\nA04-B04-L2,4,4,2,36.0,30.0\nA04-B05-L1,4,5,1,36.0,40.0\nA04-B05-L2,4,5,2,36.0,40.0\nA04-B06-L1,4,6,1,36.0,50.0\nA04-B06-L2,4,6,2,36.0,50.0\nA04-B07-L1,4,7,1,36.0,60.0\nA04-B07-L2,4,7,2,36.0,60.0\nA04-B08-L1,4,8,1,36.0,70.0\nA04-B08-L2,4,8,2,36.0,70.0\nA04-B09-L1,4,9,1,36.0,80.0\nA04-B09-L2,4,9,2,36.0,80.0\nA04-B10-L1,4,10,1,36.0,90.0\nA04-B10-L2,4,10,2,36.0,90.0\nA05-B01-L1,5,1,1,48.0,0.0\nA05-B01-L2,5,1,2,48.0,0.0\nA05-B02-L1,5,2,1,48.0,10.0\nA05-B02-L2,5,2,2,48.0,10.0\nA05-B03-L1,5,3,1,48.0,20.0\nA05-B03-L2,5,3,2,48.0,20.0\nA05-B04-L1,5,4,1,48.0,30.0\nA05-B04-L2,5,4,2,48.0,30.0\nA05-B05-L1,5,5,1,48.0,40.0\nA05-B05-L2,5,5,2,48.0,40.0\nA05-B06-L1,5,6,1,48.0,50.0\nA05-B06-L2,5,6,2,48.0,50.0\nA05-B07-L1,5,7,1,48.0,60.0\nA05-B07-L2,5,7,2,48.0,60.0\nA05-B08-L1,5,8,1,48.0,70.0\nA05-B08-L2,5,8,2,48.0,70.0\nA05-B09-L1,5,9,1,48.0,80.0\nA05-B09-L2,5,9,2,48.0,80.0\nA05-B10-L1,5,10,1,48.0,90.0\nA05-B10-L2,5,10,2,48.0,90.0\nA06-B01-L1,6,1,1,60.0,0.0\nA06-B01-L2,6,1,2,60.0,0.0\nA06-B02-L1,6,2,1,60.0,10.0\nA06-B02-L2,6,2,2,60.0,10.0\nA06-B03-L1,6,3,1,60.0,20.0\nA06-B03-L2,6,3,2,60.0,20.0\nA06-B04-L1,6,4,1,60.0,30.0\nA06-B04-L2,6,4,2,60.0,30.0\nA06-B05-L1,6,5,1,60.0,40.0\nA06-B05-L2,6,5,2,60.0,40.0\nA06-B06-L1,6,6,1,60.0,50.0\nA06-B06-L2,6,6,2,60.0,50.0\nA06-B07-L1,6,7,1,60.0,60.0\nA06-B07-L2,6,7,2,60.0,60.0\nA06-B08-L1,6,8,1,60.0,70.0\nA06-B08-L2,6,8,2,60.0,70.0\nA06-B09-L1,6,9,1,60.0,80.0\nA06-B09-L2,6,9,2,60.0,80.0\nA06-B10-L1,6,10,1,60.0,90.0\nA06-B10-L2,6,10,2,60.0,90.0\nA07-B01-L1,7,1,1,72.0,0.0\nA07-B01-L2,7,1,2,72.0,0.0\nA07-B02-L1,7,2,1,72.0,10.0\nA07-B02-L2,7,2,2,72.0,10.0\nA07-B03-L1,7,3,1,72.0,20.0\nA07-B03-L2,7,3,2,72.0,20.0\nA07-B04-L1,7,4,1,72.0,30.0\nA07-B04-L2,7,4,2,72.0,30.0\nA07-B05-L1,7,5,1,72.0,40.0\nA07-B05-L2,7,5,2,72.0,40.0\nA07-B06-L1,7,6,1,72.0,50.0\nA07-B06-L2,7,6,2,72.0,50.0\nA07-B07-L1,7,7,1,72.0,60.0\nA07-B07-L2,7,7,2,72.0,60.0\nA07-B08-L1,7,8,1,72.0,70.0\nA07-B08-L2,7,8,2,72.0,70.0\nA07-B09-L1,7,9,1,72.0,80.0\nA07-B09-L2,7,9,2,72.0,80.0\nA07-B10-L1,7,10,1,72.0,90.0\nA07-B10-L2,7,10,2,72.0,90.0\nA08-B01-L1,8,1,1,84.0,0.0\nA08-B01-L2,8,1,2,84.0,0.0\nA08-B02-L1,8,2,1,84.0,10.0\nA08-B02-L2,8,2,2,84.0,10.0\nA08-B03-L1,8,3,1,84.0,20.0\nA08-B03-L2,8,3,2,84.0,20.0\nA08-B04-L1,8,4,1,84.0,30.0\nA08-B04-L2,8,4,2,84.0,30.0\nA08-B05-L1,8,5,1,84.0,40.0\nA08-B05-L2,8,5,2,84.0,40.0\nA08-B06-L1,8,6,1,84.0,50.0\nA08-B06-L2,8,6,2,84.0,50.0\nA08-B07-L1,8,7,1,84.0,60.0\nA08-B07-L2,8,7,2,84.0,60.0\nA08-B08-L1,8,8,1,84.0,70.0\nA08-B08-L2,8,8,2,84.0,70.0\nA08-B09-L1,8,9,1,84.0,80.0\nA08-B09-L2,8,9,2,84.0,80.0\nA08-B10-L1,8,10,1,84.0,90.0\nA08-B10-L2,8,10,2,84.0,90.0\nA09-B01-L1,9,1,1,96.0,0.0\nA09-B01-L2,9,1,2,96.0,0.0\nA09-B02-L1,9,2,1,96.0,10.0\nA09-B02-L2,9,2,2,96.0,10.0\nA09-B03-L1,9,3,1,96.0,20.0\nA09-B03-L2,9,3,2,96.0,20.0\nA09-B04-L1,9,4,1,96.0,30.0\nA09-B04-L2,9,4,2,96.0,30.0\nA09-B05-L1,9,5,1,96.0,40.0\nA09-B05-L2,9,5,2,96.0,40.0\nA09-B06-L1,9,6,1,96.0,50.0\nA09-B06-L2,9,6,2,96.0,50.0\nA09-B07-L1,9,7,1,96.0,60.0\nA09-B07-L2,9,7,2,96.0,60.0\nA09-B08-L1,9,8,1,96.0,70.0\nA09-B08-L2,9,8,2,96.0,70.0\nA09-B09-L1,9,9,1,96.0,80.0\nA09-B09-L2,9,9,2,96.0,80.0\nA09-B10-L1,9,10,1,96.0,90.0\nA09-B10-L2,9,10,2,96.0,90.0\nA10-B01-L1,10,1,1,108.0,0.0\nA10-B01-L2,10,1,2,108.0,0.0\nA10-B02-L1,10,2,1,108.0,10.0\nA10-B02-L2,10,2,2,108.0,10.0\nA10-B03-L1,10,3,1,108.0,20.0\nA10-B03-L2,10,3,2,108.0,20.0\nA10-B04-L1,10,4,1,108.0,30.0\nA10-B04-L2,10,4,2,108.0,30.0\nA10-B05-L1,10,5,1,108.0,40.0\nA10-B05-L2,10,5,2,108.0,40.0\nA10-B06-L1,10,6,1,108.0,50.0\nA10-B06-L2,10,6,2,108.0,50.0\nA10-B07-L1,10,7,1,108.0,60.0\nA10-B07-L2,10,7,2,108.0,60.0\nA10-B08-L1,10,8,1,108.0,70.0\nA10-B08-L2,10,8,2,108.0,70.0\nA10-B09-L1,10,9,1,108.0,80.0\nA10-B09-L2,10,9,2,108.0,80.0\nA10-B10-L1,10,10,1,108.0,90.0\nA10-B10-L2,10,10,2,108.0,90.0\n", "orders": "order_id,line,location_id,sku,qty\nORD-1001,1,A01-B01-L1,SKU-0001,4\nORD-1001,2,A01-B07-L1,SKU-0013,4\nORD-1001,3,A01-B07-L1,SKU-0202,6\nORD-1001,4,A01-B07-L2,SKU-0014,10\nORD-1001,5,A01-B09-L1,SKU-0017,4\nORD-1001,6,A02-B03-L1,SKU-0025,5\nORD-1001,7,A02-B06-L1,SKU-0031,4\nORD-1001,8,A06-B04-L1,SKU-0107,11\nORD-1001,9,A07-B08-L2,SKU-0136,6\nORD-1001,10,A09-B05-L1,SKU-0169,11\nORD-1001,11,A03-B05-L2,SKU-0050,12\nORD-1001,12,A02-B04-L1,SKU-0027,4\nORD-1001,13,A01-B04-L2,SKU-0008,7\nORD-1002,1,A01-B06-L1,SKU-0011,2\nORD-1002,2,A02-B03-L2,SKU-0026,12\nORD-1002,3,A04-B01-L2,SKU-0062,9\nORD-1002,4,A04-B06-L2,SKU-0072,8\nORD-1002,5,A06-B07-L2,SKU-0114,10\nORD-1002,6,A10-B01-L1,SKU-0181,1\nORD-1002,7,A10-B03-L2,SKU-0186,10\nORD-1002,8,A02-B07-L2,SKU-0204,1\nORD-1002,9,A04-B09-L2,SKU-0078,9\nORD-1003,1,A03-B05-L1,SKU-0049,12\nORD-1003,2,A03-B10-L1,SKU-0059,5\nORD-1003,3,A04-B01-L1,SKU-0061,12\nORD-1003,4,A04-B01-L2,SKU-0062,5\nORD-1003,5,A04-B03-L1,SKU-0065,6\nORD-1003,6,A04-B03-L2,SKU-0066,5\nORD-1003,7,A04-B04-L1,SKU-0067,5\nORD-1003,8,A04-B06-L1,SKU-0071,10\nORD-1003,9,A04-B06-L2,SKU-0072,10\nORD-1003,10,A04-B07-L1,SKU-0073,9\nORD-1003,11,A04-B08-L2,SKU-0076,11\nORD-1003,12,A04-B09-L1,SKU-0077,1\nORD-1003,13,A04-B09-L2,SKU-0078,2\nORD-1003,14,A04-B10-L1,SKU-0079,6\nORD-1003,15,A05-B07-L2,SKU-0094,1\nORD-1003,16,A06-B07-L2,SKU-0114,1\nORD-1003,17,A10-B01-L1,SKU-0181,7\nORD-1003,18,A10-B01-L1,SKU-0209,2\nORD-1003,19,A10-B10-L1,SKU-0224,12\nORD-1003,20,A10-B06-L1,SKU-0191,2\nORD-1003,21,A04-B04-L2,SKU-0068,9\nORD-1003,22,A09-B03-L1,SKU-0165,7\nORD-1003,23,A10-B05-L2,SKU-0190,2\nORD-1003,24,A04-B02-L1,SKU-0063,6\nORD-1003,25,A04-B05-L2,SKU-0070,11\nORD-1004,1,A01-B06-L1,SKU-0011,2\nORD-1004,2,A03-B03-L2,SKU-0046,4\nORD-1004,3,A03-B06-L2,SKU-0052,12\nORD-1004,4,A03-B10-L1,SKU-0059,11\nORD-1004,5,A03-B10-L2,SKU-0060,1\nORD-1004,6,A04-B01-L1,SKU-0061,2\nORD-1004,7,A04-B02-L1,SKU-0208,4\nORD-1004,8,A04-B05-L2,SKU-0070,4\nORD-1004,9,A04-B09-L1,SKU-0077,6\nORD-1004,10,A04-B09-L2,SKU-0078,4\nORD-1004,11,A04-B10-L2,SKU-0228,1\nORD-1004,12,A04-B10-L2,SKU-0080,8\nORD-1004,13,A06-B07-L2,SKU-0114,10\nORD-1004,14,A10-B01-L1,SKU-0181,9\nORD-1004,15,A03-B08-L2,SKU-0056,6\nORD-1004,16,A04-B05-L1,SKU-0069,9\nORD-1004,17,A03-B07-L2,SKU-0054,1\nORD-1004,18,A04-B04-L1,SKU-0067,11\nORD-1005,1,A01-B05-L2,SKU-0010,11\nORD-1005,2,A02-B02-L2,SKU-0024,6\nORD-1005,3,A02-B03-L2,SKU-0026,10\nORD-1005,4,A02-B04-L1,SKU-0027,1\nORD-1005,5,A02-B05-L2,SKU-0030,8\nORD-1005,6,A02-B07-L2,SKU-0230,8\nORD-1005,7,A02-B08-L1,SKU-0035,5\nORD-1005,8,A02-B09-L2,SKU-0038,10\nORD-1005,9,A02-B10-L1,SKU-0039,8\nORD-1005,10,A05-B06-L2,SKU-0227,6\nORD-1005,11,A06-B08-L1,SKU-0115,9\nORD-1005,12,A08-B06-L1,SKU-0151,12\nORD-1005,13,A02-B02-L1,SKU-0023,11\nORD-1005,14,A09-B06-L2,SKU-0172,8\nORD-1005,15,A02-B04-L2,SKU-0028,5\nORD-1005,16,A02-B10-L2,SKU-0040,3\nORD-1006,1,A02-B02-L1,SKU-0023,1\nORD-1006,2,A02-B02-L2,SKU-0024,12\nORD-1006,3,A02-B03-L2,SKU-0026,11\nORD-1006,4,A02-B04-L2,SKU-0028,1\nORD-1006,5,A02-B07-L1,SKU-0033,9\nORD-1006,6,A02-B07-L2,SKU-0230,2\nORD-1006,7,A02-B08-L1,SKU-0035,11\nORD-1006,8,A02-B10-L1,SKU-0039,5\nORD-1006,9,A03-B02-L1,SKU-0043,9\nORD-1006,10,A07-B04-L2,SKU-0128,10\nORD-1006,11,A07-B09-L2,SKU-0138,8\nORD-1006,12,A09-B03-L1,SKU-0165,12\nORD-1006,13,A09-B06-L2,SKU-0172,12\nORD-1006,14,A09-B10-L1,SKU-0179,10\nORD-1006,15,A10-B03-L2,SKU-0186,11\nORD-1006,16,A02-B05-L2,SKU-0030,2\nORD-1006,17,A03-B06-L2,SKU-0052,8\nORD-1006,18,A09-B10-L2,SKU-0180,6\nORD-1006,19,A02-B01-L2,SKU-0022,10\nORD-1006,20,A09-B04-L1,SKU-0167,6\nORD-1007,1,A01-B04-L2,SKU-0229,3\nORD-1007,2,A01-B05-L2,SKU-0010,3\nORD-1007,3,A01-B08-L1,SKU-0015,10\nORD-1007,4,A02-B01-L1,SKU-0021,12\nORD-1007,5,A02-B04-L2,SKU-0028,8\nORD-1007,6,A02-B05-L1,SKU-0029,9\nORD-1007,7,A02-B05-L2,SKU-0030,1\nORD-1007,8,A02-B06-L1,SKU-0031,12\nORD-1007,9,A02-B07-L2,SKU-0204,2\nORD-1007,10,A02-B08-L1,SKU-0035,9\nORD-1007,11,A02-B09-L2,SKU-0038,4\nORD-1007,12,A02-B10-L1,SKU-0039,4\nORD-1007,13,A02-B10-L2,SKU-0040,11\nORD-1007,14,A07-B08-L2,SKU-0136,5\nORD-1007,15,A08-B07-L2,SKU-0154,2\nORD-1007,16,A09-B03-L1,SKU-0165,5\nORD-1007,17,A09-B04-L1,SKU-0167,7\nORD-1007,18,A10-B03-L2,SKU-0186,8\nORD-1007,19,A10-B06-L2,SKU-0201,9\nORD-1007,20,A02-B01-L2,SKU-0022,1\nORD-1007,21,A02-B02-L2,SKU-0024,5\nORD-1007,22,A02-B03-L2,SKU-0026,2\nORD-1007,23,A02-B07-L2,SKU-0230,7\nORD-1007,24,A02-B07-L2,SKU-0034,6\nORD-1007,25,A01-B04-L1,SKU-0007,5\nORD-1008,1,A03-B01-L2,SKU-0042,6\nORD-1008,2,A03-B03-L2,SKU-0046,6\nORD-1008,3,A03-B04-L1,SKU-0047,6\nORD-1008,4,A03-B04-L2,SKU-0048,11\nORD-1008,5,A03-B05-L1,SKU-0049,1\nORD-1008,6,A03-B07-L1,SKU-0053,11\nORD-1008,7,A03-B07-L2,SKU-0054,6\nORD-1008,8,A03-B08-L1,SKU-0055,3\nORD-1008,9,A03-B08-L2,SKU-0056,4\nORD-1008,10,A03-B09-L1,SKU-0057,12\nORD-1008,11,A03-B10-L2,SKU-0060,11\nORD-1008,12,A07-B07-L1,SKU-0214,8\nORD-1008,13,A09-B08-L1,SKU-0175,4\nORD-1008,14,A10-B06-L2,SKU-0201,2\nORD-1008,15,A03-B02-L1,SKU-0043,9\nORD-1008,16,A03-B03-L1,SKU-0045,2\nORD-1008,17,A09-B10-L2,SKU-0180,8\nORD-1008,18,A09-B07-L1,SKU-0218,2\nORD-1009,1,A04-B03-L1,SKU-0065,3\nORD-1009,2,A04-B04-L1,SKU-0067,9\nORD-1009,3,A04-B10-L1,SKU-0079,12\nORD-1009,4,A04-B10-L2,SKU-0080,6\nORD-1009,5,A06-B01-L2,SKU-0215,9\nORD-1009,6,A08-B02-L1,SKU-0143,7\nORD-1009,7,A08-B03-L1,SKU-0145,3\nORD-1009,8,A08-B04-L1,SKU-0147,12\nORD-1009,9,A08-B07-L1,SKU-0153,6\nORD-1009,10,A08-B07-L2,SKU-0154,10\nORD-1009,11,A08-B09-L2,SKU-0158,6\nORD-1009,12,A08-B09-L2,SKU-0220,6\nORD-1009,13,A08-B10-L2,SKU-0160,7\nORD-1009,14,A09-B07-L1,SKU-0226,11\nORD-1009,15,A08-B05-L1,SKU-0149,9\nORD-1009,16,A08-B08-L2,SKU-0156,7\nORD-1009,17,A04-B05-L1,SKU-0069,1\nORD-1009,18,A08-B10-L1,SKU-0159,12\nORD-1009,19,A08-B01-L2,SKU-0142,10\nORD-1010,1,A01-B04-L1,SKU-0007,7\nORD-1010,2,A01-B04-L2,SKU-0211,7\nORD-1010,3,A01-B07-L1,SKU-0202,10\nORD-1010,4,A05-B02-L1,SKU-0225,11\nORD-1010,5,A05-B06-L1,SKU-0091,3\nORD-1010,6,A05-B07-L1,SKU-0205,12\nORD-1010,7,A05-B08-L1,SKU-0207,8\nORD-1010,8,A08-B07-L1,SKU-0153,5\nORD-1010,9,A05-B05-L2,SKU-0090,8\nORD-1010,10,A05-B06-L2,SKU-0227,12\nORD-1011,1,A01-B07-L2,SKU-0014,3\nORD-1011,2,A09-B05-L2,SKU-0217,3\nORD-1011,3,A09-B08-L2,SKU-0176,6\nORD-1011,4,A09-B09-L1,SKU-0177,2\nORD-1011,5,A09-B09-L2,SKU-0203,11\nORD-1012,1,A08-B10-L2,SKU-0160,5\nORD-1012,2,A09-B01-L1,SKU-0161,9\nORD-1012,3,A09-B05-L1,SKU-0169,3\nORD-1012,4,A09-B08-L2,SKU-0176,5\nORD-1012,5,A09-B08-L1,SKU-0175,7\nORD-1012,6,A09-B01-L2,SKU-0162,5\nORD-1013,1,A01-B02-L2,SKU-0004,2\nORD-1013,2,A05-B01-L2,SKU-0082,6\nORD-1013,3,A05-B04-L1,SKU-0087,12\nORD-1013,4,A05-B06-L1,SKU-0091,10\nORD-1013,5,A08-B09-L1,SKU-0157,10\nORD-1013,6,A10-B10-L1,SKU-0224,10\nORD-1013,7,A05-B08-L1,SKU-0095,1\nORD-1013,8,A03-B04-L2,SKU-0048,6\nORD-1014,1,A01-B10-L1,SKU-0019,11\nORD-1014,2,A02-B02-L2,SKU-0024,10\nORD-1014,3,A02-B06-L1,SKU-0031,5\nORD-1014,4,A02-B09-L1,SKU-0037,1\nORD-1014,5,A03-B02-L1,SKU-0043,10\nORD-1014,6,A07-B09-L2,SKU-0138,11\nORD-1014,7,A08-B04-L1,SKU-0147,3\nORD-1014,8,A09-B04-L1,SKU-0167,1\nORD-1014,9,A09-B06-L2,SKU-0172,7\nORD-1014,10,A09-B08-L1,SKU-0175,6\nORD-1014,11,A02-B10-L1,SKU-0039,9\nORD-1014,12,A02-B03-L2,SKU-0026,8\nORD-1014,13,A07-B05-L2,SKU-0130,12\nORD-1014,14,A02-B04-L2,SKU-0028,5\nORD-1015,1,A01-B06-L1,SKU-0011,2\nORD-1015,2,A04-B06-L1,SKU-0071,11\nORD-1015,3,A04-B09-L1,SKU-0077,7\nORD-1015,4,A05-B09-L1,SKU-0097,9\nORD-1015,5,A06-B02-L2,SKU-0104,1\nORD-1015,6,A06-B05-L1,SKU-0109,7\nORD-1015,7,A06-B07-L2,SKU-0114,5\nORD-1015,8,A07-B09-L2,SKU-0138,9\nORD-1015,9,A04-B07-L2,SKU-0074,2\nORD-1015,10,A06-B04-L1,SKU-0107,4\nORD-1015,11,A10-B06-L1,SKU-0191,8\nORD-1016,1,A02-B09-L1,SKU-0037,11\nORD-1016,2,A03-B04-L1,SKU-0047,10\nORD-1016,3,A05-B03-L1,SKU-0085,6\nORD-1016,4,A05-B05-L2,SKU-0090,1\nORD-1016,5,A05-B06-L2,SKU-0092,12\nORD-1016,6,A05-B06-L2,SKU-0227,6\nORD-1016,7,A05-B07-L1,SKU-0093,1\nORD-1016,8,A05-B08-L1,SKU-0095,6\nORD-1016,9,A06-B02-L1,SKU-0103,3\nORD-1016,10,A08-B08-L1,SKU-0155,6\nORD-1016,11,A08-B08-L2,SKU-0156,11\nORD-1016,12,A08-B10-L1,SKU-0159,8\nORD-1016,13,A05-B02-L1,SKU-0225,11\nORD-1016,14,A09-B08-L2,SKU-0176,5\nORD-1016,15,A05-B09-L2,SKU-0098,11\nORD-1016,16,A01-B02-L2,SKU-0004,9\nORD-1017,1,A02-B03-L2,SKU-0026,6\nORD-1017,2,A02-B07-L2,SKU-0204,11\nORD-1017,3,A03-B04-L1,SKU-0047,5\nORD-1017,4,A03-B06-L2,SKU-0052,12\nORD-1017,5,A03-B07-L1,SKU-0053,7\nORD-1017,6,A03-B07-L2,SKU-0054,3\nORD-1017,7,A03-B08-L1,SKU-0055,11\nORD-1017,8,A05-B03-L2,SKU-0086,12\nORD-1017,9,A07-B01-L1,SKU-0121,11\nORD-1017,10,A07-B02-L1,SKU-0123,8\nORD-1017,11,A07-B03-L2,SKU-0126,6\nORD-1017,12,A07-B06-L1,SKU-0131,10\nORD-1017,13,A07-B07-L1,SKU-0133,9\nORD-1017,14,A07-B07-L1,SKU-0214,6\nORD-1017,15,A07-B09-L1,SKU-0137,7\nORD-1017,16,A07-B10-L2,SKU-0140,4\nORD-1017,17,A08-B06-L1,SKU-0151,1\nORD-1017,18,A09-B01-L2,SKU-0162,12\nORD-1017,19,A03-B03-L1,SKU-0045,8\nORD-1017,20,A03-B04-L2,SKU-0048,6\nORD-1017,21,A07-B02-L2,SKU-0124,4\nORD-1017,22,A07-B08-L1,SKU-0135,2\nORD-1017,23,A07-B03-L1,SKU-0125,2\nORD-1017,24,A07-B05-L1,SKU-0129,1\nORD-1018,1,A02-B08-L2,SKU-0036,2\nORD-1018,2,A04-B10-L2,SKU-0228,4\nORD-1018,3,A05-B04-L2,SKU-0088,2\nORD-1018,4,A08-B02-L1,SKU-0143,11\nORD-1018,5,A08-B02-L2,SKU-0144,5\nORD-1018,6,A08-B04-L2,SKU-0148,6\nORD-1018,7,A08-B05-L1,SKU-0149,6\nORD-1018,8,A08-B06-L2,SKU-0152,7\nORD-1018,9,A08-B07-L1,SKU-0153,7\nORD-1018,10,A08-B08-L1,SKU-0155,9\nORD-1018,11,A08-B08-L2,SKU-0156,10\nORD-1018,12,A08-B09-L1,SKU-0157,3\nORD-1018,13,A08-B10-L2,SKU-0160,11\nORD-1018,14,A09-B06-L2,SKU-0172,5\nORD-1018,15,A06-B04-L2,SKU-0210,4\nORD-1018,16,A08-B09-L2,SKU-0220,5\nORD-1018,17,A08-B09-L2,SKU-0158,1\nORD-1018,18,A08-B05-L2,SKU-0150,7\nORD-1018,19,A08-B10-L1,SKU-0159,3\nORD-1019,1,A01-B01-L2,SKU-0002,9\nORD-1019,2,A05-B02-L2,SKU-0084,5\nORD-1019,3,A05-B07-L1,SKU-0205,11\nORD-1019,4,A06-B02-L1,SKU-0223,9\nORD-1019,5,A06-B03-L2,SKU-0106,4\nORD-1019,6,A06-B04-L1,SKU-0107,7\nORD-1019,7,A06-B10-L2,SKU-0120,6\nORD-1019,8,A07-B04-L2,SKU-0128,3\nORD-1019,9,A09-B01-L1,SKU-0161,8\nORD-1019,10,A09-B02-L1,SKU-0163,12\nORD-1019,11,A09-B03-L1,SKU-0165,7\nORD-1019,12,A09-B03-L2,SKU-0166,1\nORD-1019,13,A09-B04-L1,SKU-0167,9\nORD-1019,14,A09-B04-L2,SKU-0168,1\nORD-1019,15,A09-B05-L1,SKU-0169,5\nORD-1019,16,A09-B06-L1,SKU-0171,3\nORD-1019,17,A09-B08-L2,SKU-0176,2\nORD-1019,18,A09-B10-L1,SKU-0179,8\nORD-1019,19,A04-B03-L2,SKU-0066,10\nORD-1019,20,A09-B08-L1,SKU-0175,7\nORD-1019,21,A06-B07-L1,SKU-0113,6\nORD-1019,22,A09-B07-L2,SKU-0174,9\nORD-1019,23,A09-B07-L1,SKU-0173,2\nORD-1019,24,A09-B07-L1,SKU-0218,11\nORD-1020,1,A02-B04-L1,SKU-0027,2\nORD-1020,2,A02-B08-L2,SKU-0036,8\nORD-1020,3,A03-B01-L1,SKU-0041,11\nORD-1020,4,A03-B01-L2,SKU-0042,9\nORD-1020,5,A03-B04-L2,SKU-0048,7\nORD-1020,6,A03-B07-L2,SKU-0054,7\nORD-1020,7,A03-B08-L2,SKU-0056,1\nORD-1020,8,A06-B03-L1,SKU-0105,10\nORD-1020,9,A07-B06-L2,SKU-0132,6\nORD-1020,10,A07-B07-L2,SKU-0134,2\nORD-1020,11,A08-B02-L1,SKU-0143,12\nORD-1020,12,A08-B03-L1,SKU-0145,12\nORD-1020,13,A08-B03-L2,SKU-0146,11\nORD-1020,14,A08-B05-L1,SKU-0149,11\nORD-1020,15,A08-B06-L2,SKU-0152,2\nORD-1020,16,A08-B07-L1,SKU-0153,4\nORD-1020,17,A08-B07-L2,SKU-0154,9\nORD-1020,18,A08-B09-L1,SKU-0157,6\nORD-1020,19,A08-B09-L2,SKU-0158,1\nORD-1020,20,A08-B02-L2,SKU-0144,7\nORD-1020,21,A07-B05-L1,SKU-0129,6\nORD-1020,22,A08-B01-L1,SKU-0141,7\nORD-1020,23,A03-B03-L1,SKU-0045,8\nORD-1020,24,A08-B05-L2,SKU-0150,11\nORD-1020,25,A08-B04-L2,SKU-0148,5\n"};
+var REFERENCE = {"total_pct": 37.1638};
+var pending = { locations: null, orders: null };
+
+// Rebuild the stats / map / table from a fresh (warehouse, orders, results)
+// triple - the same three things pick_path.py's CLI computes, just computed
+// here in JS instead. This is the one function both an upload and "reset to
+// sample" funnel through, so the two can never render differently.
+function renderResults(wh, orders, results, label, locName, ordName){
+  var totalWas = 0, totalNow = 0, totalLines = 0;
+  results.forEach(function(r){ totalWas += r.baseline_distance; totalNow += r.optimized_distance; totalLines += r.line_count; });
+  var totalSaved = totalWas - totalNow;
+  var totalPct = totalWas > 1e-9 ? 100 * totalSaved / totalWas : 0;
+  var pcts = results.map(function(r){ return r.pct_improvement; });
+  var bestPct = Math.max.apply(null, pcts);
+  var worstPct = Math.min.apply(null, pcts);
+  var sortedPcts = pcts.slice().sort(function(a, b){ return a - b; });
+  var mid = sortedPcts.length % 2
+    ? sortedPcts[(sortedPcts.length - 1) / 2]
+    : (sortedPcts[sortedPcts.length / 2 - 1] + sortedPcts[sortedPcts.length / 2]) / 2;
+  var under10 = pcts.filter(function(p){ return p < 10; }).length;
+
+  document.getElementById('stat-was').textContent = fmtInt(totalWas);
+  document.getElementById('stat-now').textContent = fmtInt(totalNow);
+  document.getElementById('stat-removed').textContent = fmtInt(totalSaved);
+  document.getElementById('stat-improvement').textContent = totalPct.toFixed(1);
+  document.getElementById('spreadline').innerHTML =
+    'Per order: best <span class="num">' + bestPct.toFixed(1) + '%</span>, median <span class="num">' +
+    mid.toFixed(1) + '%</span>, worst <span class="num">' + worstPct.toFixed(1) +
+    '%</span>. <span class="num">' + under10 + '</span> of <span class="num">' + results.length +
+    '</span> orders improve by less than 10% - those are already close to the shortest route.';
+
+  document.getElementById('tag').textContent = label;
+  document.getElementById('srcline').textContent =
+    locName + ' · ' + wh.pickSlotCount() + ' slots · ' + ordName + ' · ' +
+    results.length + ' orders · ' + totalLines + ' lines · generated ' + new Date().toLocaleString();
+
+  var plan = buildFloorPlan(wh);
+  var map = document.getElementById('map');
+  map.setAttribute('viewBox', '0 0 ' + Math.round(plan.width) + ' ' + Math.round(plan.height));
+  var groups = results.map(function(r){
+    var baseline = orders.get(r.order_id).map(function(l){ return l.location_id; });
+    return buildRouteGroup(plan, wh, r.order_id, baseline, r.optimized_sequence);
+  }).join('');
+  map.innerHTML = svgFloor(plan) + groups;
+
+  DATA = {};
+  results.forEach(function(r){
+    DATA[r.order_id] = { lines: r.line_count, stops: r.optimized_stops, was: fmtInt(r.baseline_distance),
+      now: fmtInt(r.optimized_distance), saved: fmtInt(r.saved), pct: r.pct_improvement.toFixed(1) };
+  });
+  document.getElementById('tbody').innerHTML = results.map(function(r){ return buildTableRow(r, bestPct); }).join('');
+
+  document.getElementById('total-count').textContent = results.length;
+  var filterBox = document.querySelector('.filter input');
+  if (filterBox) { filterBox.value = ''; }
+  filt('');
+  var heads = document.querySelectorAll('thead th');
+  for (var i = 0; i < heads.length; i++) { heads[i].removeAttribute('data-dir'); }
+  var toggleBtns = document.querySelectorAll('.toggle button');
+  mode('both', toggleBtns[0]);
+
+  pick(results[0].order_id);
+}
+
+function updateFileStatus(){
+  var el = document.getElementById('filestatus');
+  el.innerHTML =
+    '<span class="slot' + (pending.locations ? ' ok' : '') + '">Locations: <b>' +
+    (pending.locations ? escapeHtml(pending.locations.name) : 'not loaded yet') + '</b></span>' +
+    '<span class="slot' + (pending.orders ? ' ok' : '') + '">Orders: <b>' +
+    (pending.orders ? escapeHtml(pending.orders.name) : 'not loaded yet') + '</b></span>';
+}
+
+function hideError(){ document.getElementById('errorbox').hidden = true; }
+
+function describeFileError(fileLabel, err){
+  if (err instanceof ColumnError){
+    var extra;
+    if (err.missing.indexOf('x') >= 0 || err.missing.indexOf('y') >= 0){
+      extra = 'Location coordinates (x / y) are almost never in a WMS export as-is - they usually ' +
+        'have to be built from your aisle spacing and bay pitch. This is exactly what CLIENT_PROMPT.md ' +
+        'is for: open it in this folder and follow it with Claude Code (or claude.ai) to build a small ' +
+        'adapter for your export, then drop what it produces back in here.';
+    } else {
+      extra = 'This is normal for a real WMS export - the column names almost never match on the first ' +
+        'try. Open CLIENT_PROMPT.md in this folder and follow it with Claude Code (or claude.ai) to build ' +
+        'a small adapter for your column names, then drop what it produces back in here.';
+    }
+    return '<b>' + fileLabel + " doesn't have the columns this expects.</b>" +
+      '<div class="cols">Missing: ' + escapeHtml(err.missing.join(', ')) +
+      '<br>Found: ' + escapeHtml(err.found.join(', ')) + '</div>' +
+      '<div class="fix">' + extra + '</div>';
+  }
+  return '<b>' + fileLabel + ':</b> ' + escapeHtml(err.message);
+}
+
+function showError(kind, info){
+  var box = document.getElementById('errorbox');
+  var html;
+  if (kind === 'unrecognized'){
+    html = '<b>Not recognized:</b> ' + info.names.map(function(n){ return escapeHtml(n); }).join(', ') +
+      '<div class="cols">Expecting one file with location_id / aisle / bay / level / x / y, and one ' +
+      'file with order_id / line / location_id / sku / qty.</div>' +
+      '<div class="fix">If these came straight out of your WMS, this is expected - almost no export ' +
+      'already uses these exact column names, and coordinates in particular are rarely present at all. ' +
+      'Open CLIENT_PROMPT.md in this folder and follow it with Claude Code (or claude.ai) to build a ' +
+      'small adapter for your export, then drop what it produces back in here.</div>';
+  } else if (kind === 'read'){
+    html = '<b>Could not read the file:</b> ' + escapeHtml(info.message);
+  } else if (kind === 'join'){
+    var shown = info.missing.slice(0, 10).map(function(s){ return escapeHtml(s); }).join(', ');
+    var more = info.missing.length > 10 ? ' (+' + (info.missing.length - 10) + ' more)' : '';
+    html = '<b>' + info.missing.length + ' slot(s) picked but not in your location file:</b> ' + shown + more +
+      '<div class="fix">Check that both files came from the same export and cover the same date range.</div>';
+  } else {
+    html = describeFileError(kind === 'locations' ? 'Your locations file' : 'Your orders file', info.error);
+  }
+  box.innerHTML = html;
+  box.hidden = false;
+}
+
+function fileDetectType(text){
+  // Classify by SIGNATURE columns, not by requiring every column to already
+  // be present - a file requiring all six locations columns before it is
+  // even recognised as "a locations file" means a real export missing just
+  // one (x/y almost always, since a WMS rarely has them) always falls into
+  // the vague "not recognized as either" bucket instead of the precise
+  // "you're missing: x, y" one that readLocations() can give it. order_id,
+  // sku and qty essentially never appear in a location master, so their
+  // presence is a strong, cheap signal either way.
+  var parsed = parseCSV(text);
+  var have = new Set(parsed.header.map(function(h){ return h.trim().toLowerCase(); }));
+  if (have.has('order_id') || have.has('sku') || have.has('qty')) { return 'orders'; }
+  if (have.has('location_id')) { return 'locations'; }
+  return null;
+}
+
+function readFileText(file){
+  return new Promise(function(resolve, reject){
+    var reader = new FileReader();
+    reader.onload = function(){ resolve(reader.result); };
+    reader.onerror = function(){ reject(new Error('Could not read ' + file.name + ' - the browser refused to open it.')); };
+    reader.readAsText(file);
+  });
+}
+
+function tryCompute(){
+  var locations, orders, wh;
+  try { locations = readLocations(pending.locations.text, pending.locations.name); }
+  catch (e) { showError('locations', { error: e }); return; }
+  try { orders = readOrders(pending.orders.text, pending.orders.name); }
+  catch (e) { showError('orders', { error: e }); return; }
+
+  wh = makeWarehouse(locations);
+  var missing = new Set();
+  orders.forEach(function(lines){
+    lines.forEach(function(line){ if (!locations.has(line.location_id)) { missing.add(line.location_id); } });
+  });
+  if (missing.size){
+    showError('join', { missing: Array.from(missing).sort(codePointCompare) });
+    return;
+  }
+
+  var orderIds = Array.from(orders.keys()).sort(codePointCompare);
+  var results = orderIds.map(function(id){ return optimizeOrder(wh, orders.get(id)); });
+
+  hideError();
+  renderResults(wh, orders, results, 'Your data', pending.locations.name, pending.orders.name);
+  document.getElementById('datasource').textContent = pending.locations.name + ' + ' + pending.orders.name;
+  document.getElementById('resetlink').hidden = false;
+}
+
+function handleFiles(fileList){
+  hideError();
+  var files = Array.prototype.slice.call(fileList).filter(function(f){ return /\.csv$/i.test(f.name) || f.type.indexOf('csv') >= 0 || f.type === ''; });
+  if (!files.length){ return; }
+  Promise.all(files.map(readFileText)).then(function(texts){
+    var unrecognized = [];
+    files.forEach(function(file, i){
+      var kind;
+      try { kind = fileDetectType(texts[i]); } catch (e) { kind = null; }
+      if (kind === 'locations') { pending.locations = { name: file.name, text: texts[i] }; }
+      else if (kind === 'orders') { pending.orders = { name: file.name, text: texts[i] }; }
+      else { unrecognized.push(file.name); }
+    });
+    updateFileStatus();
+    if (unrecognized.length){ showError('unrecognized', { names: unrecognized }); }
+    if (pending.locations && pending.orders){ tryCompute(); }
+  }).catch(function(e){
+    showError('read', { message: e.message });
+  });
+}
+
+function resetToSample(e){
+  if (e) { e.preventDefault(); }
+  pending = { locations: null, orders: null };
+  updateFileStatus();
+  hideError();
+
+  var locations = readLocations(SAMPLE.locations, 'locations.csv');
+  var orders = readOrders(SAMPLE.orders, 'orders.csv');
+  var wh = makeWarehouse(locations);
+  var orderIds = Array.from(orders.keys()).sort(codePointCompare);
+  var results = orderIds.map(function(id){ return optimizeOrder(wh, orders.get(id)); });
+
+  // Quiet drift check: does the JS engine agree with what pick_path.py
+  // computed for this exact sample at generation time? Console-only - an
+  // internal engineering assertion has no business surfacing to a client.
+  var totalWas = 0, totalNow = 0;
+  results.forEach(function(r){ totalWas += r.baseline_distance; totalNow += r.optimized_distance; });
+  var totalPct = totalWas > 1e-9 ? 100 * (totalWas - totalNow) / totalWas : 0;
+  if (Math.abs(totalPct - REFERENCE.total_pct) > 0.05){
+    console.error('pickpath: the browser engine disagrees with the Python reference for the sample data.',
+      { js_pct: totalPct, python_pct: REFERENCE.total_pct });
+  }
+
+  renderResults(wh, orders, results, 'Synthetic sample data', 'locations.csv', 'orders.csv');
+  document.getElementById('datasource').textContent = 'the synthetic sample data';
+  document.getElementById('resetlink').hidden = true;
+}
+
+function initUpload(){
+  var dz = document.getElementById('dropzone');
+  var input = document.getElementById('fileInput');
+  updateFileStatus();
+  dz.addEventListener('click', function(){ input.click(); });
+  dz.addEventListener('keydown', function(e){ if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); input.click(); } });
+  input.addEventListener('change', function(){ if (input.files.length) { handleFiles(input.files); } input.value = ''; });
+  ['dragenter','dragover'].forEach(function(evt){
+    dz.addEventListener(evt, function(e){ e.preventDefault(); e.stopPropagation(); dz.classList.add('drag'); });
+  });
+  ['dragleave','drop'].forEach(function(evt){
+    dz.addEventListener(evt, function(e){ e.preventDefault(); e.stopPropagation(); dz.classList.remove('drag'); });
+  });
+  dz.addEventListener('drop', function(e){
+    if (e.dataTransfer && e.dataTransfer.files.length) { handleFiles(e.dataTransfer.files); }
+  });
+}
+
+initUpload();
+pick('ORD-1001');
+</script>
+</body></html>

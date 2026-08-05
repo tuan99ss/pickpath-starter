@@ -17,8 +17,8 @@ to put them.
 2. **Give it the files.**
    - *Claude Code:* open a terminal in this folder and start `claude` there — it can already
      read every file, so there is nothing to attach.
-   - *claude.ai in a browser:* attach three files from this folder — `pick_path.py`,
-     `make_dashboard.py` and `README.md`.
+   - *claude.ai in a browser:* attach four files from this folder — `pick_path.py`,
+     `pickpath_engine.js`, `make_dashboard.py` and `README.md`.
 3. **Copy everything inside the box below** — from `You are helping me…` down to the
    last line — and paste it as your first message, along with those attachments.
 4. Answer the questions it asks. It will ask about your building, your export, and your
@@ -65,10 +65,11 @@ in warehouse operations, not IT. I can run a command if you tell me exactly what
 type, and I can open a CSV in Excel, but I do not write code. Please work with me on
 that basis.
 
-You have three files to work from: pick_path.py (the optimizer), make_dashboard.py
-(builds a floor map of the routes as an HTML page), and README.md (what it does and how
-it models the warehouse). They are either attached to this message or in the folder you
-are running in. Read all three before you ask me anything.
+You have four files to work from: pick_path.py (the optimizer), pickpath_engine.js (the
+same optimizer, ported to JavaScript so it can run inside a browser with no server),
+make_dashboard.py (builds a floor map and an upload box as one HTML page), and README.md
+(what it does and how it models the warehouse). They are either attached to this message
+or in the folder you are running in. Read all four before you ask me anything.
 
 One thing to get right every time you rebuild the dashboard on my data: pass
 --data-label with something that identifies my export, for example
@@ -105,6 +106,15 @@ and the numbers always come from the same model. Keep it that way. If you change
 travel works, change it once in pick_path.py and let the map follow. Never copy a
 distance calculation into the dashboard — a map that disagrees with the numbers is worse
 than no map, because it looks like evidence.
+
+There is a third copy of the same logic: pickpath_engine.js, a JavaScript port that runs
+inside dashboard.html so I can drag a CSV into my browser and see results with no Python
+running at all. If you change the distance model or the route builder in pick_path.py,
+make the identical change in pickpath_engine.js, then run `node test_pickpath_engine.js`
+(if I have Node) to prove the two still agree. If I do not have Node, tell me plainly that
+the browser upload box is unverified until I do, rather than silently leaving it stale —
+a browser page that quietly computes different numbers from the CLI is the same failure
+mode as a map that disagrees with the numbers, just harder for me to notice.
 
 Instead, write a separate adapter script that reads my WMS export and produces the two
 CSV files pick_path.py already expects (locations.csv and orders.csv, with the columns
@@ -207,8 +217,10 @@ This step is not optional and it is the part I care most about. A pick-path tool
 produces confident wrong numbers is worse than no tool, because I will make staffing
 decisions with it. Do not tell me it is working until we have done all five of these:
 
-1. **Show me the map first.** Rebuild the dashboard on my data and have me look at the
-   floor map before we discuss a single number. I know what my building looks like. If
+1. **Show me the map first.** Have me look at the floor map on my own data before we
+   discuss a single number — the fastest way is dragging my adapted CSVs into the upload
+   box on dashboard.html directly, no command needed, so I can do this myself and
+   immediately again after any change you make. I know what my building looks like. If
    the aisles are the wrong way round, an area is missing, staging is in the wrong place,
    or a route line cuts through racking, I will see it in seconds — and any of those means
    the geometry is wrong and every number is wrong with it. This is the cheapest check we

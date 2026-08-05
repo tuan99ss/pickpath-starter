@@ -121,18 +121,19 @@ def read_locations(path: Path) -> dict[str, Location]:
     with open(path, newline="", encoding="utf-8-sig") as handle:
         reader = csv.DictReader(handle)
         _require_columns(reader.fieldnames, ["location_id", "aisle", "bay", "level", "x", "y"], path)
+        field = _column_lookup(reader.fieldnames)
         for row_no, row in enumerate(reader, start=2):
-            loc_id = (row["location_id"] or "").strip()
+            loc_id = (row[field["location_id"]] or "").strip()
             if not loc_id:
                 continue  # skip blank padding rows at the end of an export
             try:
                 loc = Location(
                     location_id=loc_id,
-                    aisle=int(float(row["aisle"] or 0)),
-                    bay=int(float(row["bay"] or 0)),
-                    level=int(float(row["level"] or 0)),
-                    x=float(row["x"]),
-                    y=float(row["y"]),
+                    aisle=int(float(row[field["aisle"]] or 0)),
+                    bay=int(float(row[field["bay"]] or 0)),
+                    level=int(float(row[field["level"]] or 0)),
+                    x=float(row[field["x"]]),
+                    y=float(row[field["y"]]),
                 )
             except ValueError as exc:
                 raise SystemExit(f"{path} line {row_no}: could not read a number ({exc})")
@@ -157,18 +158,19 @@ def read_orders(path: Path) -> dict[str, list[OrderLine]]:
     with open(path, newline="", encoding="utf-8-sig") as handle:
         reader = csv.DictReader(handle)
         _require_columns(reader.fieldnames, ["order_id", "line", "location_id", "sku", "qty"], path)
+        field = _column_lookup(reader.fieldnames)
         for row_no, row in enumerate(reader, start=2):
-            order_id = (row["order_id"] or "").strip()
-            loc_id = (row["location_id"] or "").strip()
+            order_id = (row[field["order_id"]] or "").strip()
+            loc_id = (row[field["location_id"]] or "").strip()
             if not order_id or not loc_id:
                 continue
             try:
                 line = OrderLine(
                     order_id=order_id,
-                    line=int(float(row["line"] or 0)),
+                    line=int(float(row[field["line"]] or 0)),
                     location_id=loc_id,
-                    sku=(row["sku"] or "").strip(),
-                    qty=float(row["qty"] or 0),
+                    sku=(row[field["sku"]] or "").strip(),
+                    qty=float(row[field["qty"]] or 0),
                 )
             except ValueError as exc:
                 raise SystemExit(f"{path} line {row_no}: could not read a number ({exc})")
@@ -191,6 +193,18 @@ def _require_columns(found: list[str] | None, needed: list[str], path: Path) -> 
             f"{path} is missing required column(s): {', '.join(missing)}\n"
             f"Found: {', '.join(found or ['(no header row)'])}"
         )
+
+
+def _column_lookup(found: list[str]) -> dict[str, str]:
+    """Map a lowercased column name back to the literal header text in the file.
+
+    _require_columns() checks column presence case-insensitively (so a header
+    of "Location_ID" satisfies a requirement for "location_id"), so the actual
+    row lookups have to be case-insensitive too. Without this, a correctly
+    detected header would still crash on `row["location_id"]` with a raw
+    KeyError instead of the clean error message the check above promises.
+    """
+    return {name.strip().lower(): name for name in found}
 
 
 # --------------------------------------------------------------------------

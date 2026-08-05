@@ -25,14 +25,30 @@ files staying where they are.
 
 ---
 
-## What you need
+## The fastest way to look at this: no install, no terminal
 
-- Python 3.10 or newer.
-- Nothing else. The script uses only the Python standard library, so there is nothing
-  to install and nothing for IT to approve.
+**Double-click `dashboard.html`.** It opens in your browser with the sample data already
+loaded. Scroll to **"Try it on your own data"** and drag your two CSV files into the box —
+or click it to browse for them.
 
-To check what you have, open a terminal (Command Prompt or PowerShell on Windows,
-Terminal on Mac) and run:
+Everything happens on your machine, in that browser tab. There is no server, nothing is
+sent anywhere, and it works with the wifi off — you can check that claim yourself in
+[About the numbers](#about-the-numbers) below. If your columns already happen to match
+the schema this expects, you have your numbers in a couple of seconds. If they do not —
+which is normal; see [Adapting this to your warehouse](#adapting-this-to-your-warehouse)
+— it tells you exactly what does not match and what to do next.
+
+This needs nothing but a browser. No Python, no command line, nothing to install.
+
+---
+
+## The other way: the command line
+
+Useful if you want the raw CSV output, want to script this into something else, or
+just prefer a terminal. Needs Python 3.10 or newer — nothing else, no packages to
+install.
+
+To check what you have:
 
 ```bash
 python --version
@@ -40,10 +56,6 @@ python --version
 
 If that reports 3.10 or higher, you are ready. If the command is not found, try
 `python3 --version`, and use `python3` everywhere below.
-
----
-
-## How to run it
 
 Put all the files in one folder, open a terminal in that folder, and run:
 
@@ -138,13 +150,12 @@ one row per order, ready to open in Excel.
 ## The floor map
 
 A table of distances is hard to argue with and easy to ignore. The map is the part
-people react to. Build it with:
+people react to. `dashboard.html` in this folder is already built, from the sample data,
+ready to open. Rebuild it any time with:
 
 ```bash
 python make_dashboard.py
 ```
-
-That writes `dashboard.html`. Double-click it and it opens in your browser.
 
 You get a top-down plan of the floor with both routes drawn on it for whichever order you
 click — the route as issued in one colour, the optimized route in the other, with the
@@ -153,25 +164,35 @@ it**, out to a cross-aisle and back, because that is what the distance model doe
 straight line through a rack would be a picture of something impossible.
 
 Toggle between the two routes to see the difference on its own. The order list on the
-right doubles as the selector.
+right doubles as the selector, and it sorts and filters — type a slot label like `A03`
+to find every order that visits it.
 
-Two things worth knowing about how it is built:
+Three things worth knowing about how it is built:
 
 - **It imports `pick_path.py` rather than repeating any of the math.** The map and the
-  numbers come from the same distance model, so they cannot drift apart. When you change
-  the model to match your building, the map changes with it.
+  numbers come from the same distance model, so they cannot drift apart when you change
+  the model to match your building.
+- **The upload box runs on a JavaScript port of the same engine** — `pickpath_engine.js`,
+  hand-written and checked byte-for-byte against `pick_path.py`'s own output (that check is
+  what `test_pickpath_engine.js` does; see below). That is the only way "drag a CSV into
+  your browser" can compute anything without a server sitting behind it.
 - **The file is genuinely self-contained.** No CDN, no fonts fetched from anywhere, no
   scripts loaded over the network, nothing that reports back. It works with the wifi off.
-  You can email it to a colleague and it will still work.
+  You can email it to a colleague and it will still work — though see
+  [If something goes wrong](#if-something-goes-wrong) if your mail system strips `.py`
+  attachments; `.html` usually survives.
 
-When you run it on your own data, label it so nobody mistakes one for the other:
+When you build it from your own CSVs on the command line, label it so nobody mistakes one
+for the other:
 
 ```bash
 python make_dashboard.py --data-label "Live export, week of 4 Aug"
 ```
 
 The label prints on the page. It defaults to "Synthetic sample data" — deliberately, so
-an unlabelled page understates rather than overstates what it is showing.
+an unlabelled page understates rather than overstates what it is showing. The upload box
+does this automatically too: drag your files in and the label switches to "Your data" on
+its own.
 
 ---
 
@@ -193,6 +214,20 @@ would report optimistic numbers on every order and nothing downstream would catc
 Two more check that the picture cannot flatter the arithmetic: every line drawn on the
 map is exactly as long as the distance printed in the table, and no drawn segment ever
 crosses racking.
+
+If you have Node.js, there is a second suite for the browser engine:
+
+```bash
+node test_pickpath_engine.js
+```
+
+Seventeen checks. It runs the same physical checks against `pickpath_engine.js`, then
+goes further: it runs `pick_path.py` itself and diffs the JavaScript engine's numbers
+against a fresh Python run, row for row, and diffs the JavaScript-rendered map and table
+markup against what is actually sitting in `dashboard.html`. This is the check that
+matters most for the upload box specifically — it is the difference between "the browser
+engine looks right" and "the browser engine provably agrees with the Python original,
+today, on this machine."
 
 ---
 
@@ -275,22 +310,45 @@ instructions at the top, and answer the questions it asks you.
 
 | file | what it is |
 |---|---|
+| `dashboard.html` | **open this first** — floor map + upload box, pre-built with the sample data |
 | `pick_path.py` | the optimizer — the whole thing, commented throughout |
-| `make_dashboard.py` | builds the floor map page; imports the optimizer, repeats none of it |
+| `pickpath_engine.js` | the same optimizer, ported to JavaScript so the upload box can run it |
+| `make_dashboard.py` | builds `dashboard.html`; imports the optimizer, repeats none of it |
 | `locations.csv` | synthetic location master: 200 pick slots across 10 aisles, plus staging |
 | `orders.csv` | synthetic pick orders: 20 orders, 5–25 lines each |
-| `test_pick_path.py` | proves the distance model — run it, do not trust it |
+| `test_pick_path.py` | proves the Python distance model — run it, do not trust it |
+| `test_pickpath_engine.js` | proves the JavaScript engine agrees with the Python one |
 | `README.md` | this file |
 | `CLIENT_PROMPT.md` | the prompt for adapting this to your warehouse |
 | `LICENSE` | MIT |
 
-`results.csv` and `dashboard.html` are generated, not checked in.
+`results.csv` is generated, not checked in — `dashboard.html` is checked in as a ready-to-open
+snapshot built from the sample data, and `python make_dashboard.py` refreshes it any time.
 
 The sample data is generated, not taken from anyone's warehouse.
 
 ---
 
 ## If something goes wrong
+
+**In the browser (the upload box):**
+
+- **"Not recognized"** — neither file you dropped in has the columns this expects. If
+  they came straight out of your WMS, that is normal; open `CLIENT_PROMPT.md` and follow
+  it with Claude Code or claude.ai to build an adapter, then drop what it produces in here.
+- **"Doesn't have the columns this expects", with a Missing: list** — one file was close
+  enough to identify (it has `location_id`, or it has `order_id`/`sku`/`qty`) but is
+  missing specific columns, named exactly. `x`/`y` missing is the most common case — see
+  the note in that message about why coordinates almost never survive a WMS export as-is.
+- **"Slot(s) picked but not in your location file"** — the two files do not agree on
+  which slots exist. Check they came from the same export and cover the same locations.
+- **Nothing happens when you drop a file** — check it is a `.csv`; other file types are
+  ignored rather than guessed at.
+- **A `.py` attachment vanished from an email** — Microsoft blocks `.py`/`.pyc`/`.pyw` by
+  default in Outlook on the web. `.html` is not on that list, so send `dashboard.html`
+  itself if you need to move this by email.
+
+**On the command line:**
 
 - **`File not found: locations.csv`** — run the script from the folder the CSVs are in,
   or pass `--locations` and `--orders` with full paths.
@@ -309,5 +367,6 @@ MIT — see `LICENSE`. Use it, change it, ship it in your own systems, no attrib
 required and nothing owed back.
 
 It is published openly for a specific reason: the claim that nothing leaves your building
-is only worth as much as your ability to verify it. Search the source for `http`, `requests`,
-`urllib`, `socket` — there are no matches, and you should not have to take that on faith.
+is only worth as much as your ability to verify it. Search the Python source for `http`,
+`requests`, `urllib`, `socket` and the JavaScript for `fetch`, `XMLHttpRequest`, `WebSocket`
+— there are no matches in either, and you should not have to take that on faith.

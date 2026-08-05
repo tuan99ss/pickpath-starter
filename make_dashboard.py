@@ -37,6 +37,25 @@ from pathlib import Path
 
 import pick_path as pp
 
+# The browser-side engine that lets the page recompute results from a CSV a
+# visitor picks off their own disk, with no server involved. It is a hand
+# ported mirror of pick_path.py + this file's own SVG/table builders, and it
+# is verified against them (see the repo's test suite) - if you change the
+# distance model, the route builder, or the CSV-reading rules in pick_path.py,
+# make the matching change in pickpath_engine.js or the browser and the CLI
+# will quietly start disagreeing.
+ENGINE_JS_PATH = Path(__file__).resolve().parent / "pickpath_engine.js"
+
+
+def _safe_json(obj) -> str:
+    """json.dumps(), hardened for embedding inside a <script> tag.
+
+    A location_id or sku that happened to contain the literal text
+    "</script" could otherwise close the tag early. Cheap to guard against,
+    so it is guarded against.
+    """
+    return json.dumps(obj).replace("</", "<\\/")
+
 # How much of the gap between two aisles is driveable aisle rather than rack.
 # Only affects how the map is drawn, never a distance.
 CORRIDOR_FRACTION = 0.22
@@ -232,7 +251,7 @@ CSS = """
 :root{
   --ground:#FAF9F7; --panel:#FFFFFF; --ink:#1A1D21; --ink-dim:#5C6169;
   --ink-faint:#8A9099; --line:#DCD9D4; --line-soft:#EBE8E4;
-  --was:#C0483D; --now:#16697A; --rack:#EAE7E2; --rack-line:#D6D2CC;
+  --was:#C0483D; --now:#16697A; --rack:#EAE7E2; --rack-line:#D6D2CC; --alert:#B23A2E;
   --mono:ui-monospace,"Cascadia Code","SF Mono",Menlo,Consolas,monospace;
   --sans:ui-sans-serif,system-ui,-apple-system,"Segoe UI",sans-serif;
 }
@@ -329,6 +348,27 @@ td.seq{font-family:var(--mono);font-size:11px;color:var(--ink-faint);
 
 .caption{padding:11px 15px;border-top:1px solid var(--line-soft);font-size:12.5px;color:var(--ink-dim)}
 .caption b{color:var(--ink);font-weight:600}
+
+.upload{margin-bottom:22px}
+.uploadbody{padding:15px}
+.dropzone{display:block;border:1.5px dashed var(--line);border-radius:6px;padding:22px 18px;
+  text-align:center;cursor:pointer;transition:border-color .15s,background .15s}
+.dropzone:hover,.dropzone:focus-visible{border-color:var(--now);background:#F6FAFA;outline:none}
+.dropzone.drag{border-color:var(--now);background:#EEF6F7}
+.dz-icon{font-size:19px;color:var(--ink-faint);margin-bottom:4px}
+.dz-text{font-size:13.5px;color:var(--ink);font-weight:500}
+.dz-hint{font-size:11.5px;color:var(--ink-faint);margin-top:7px;font-family:var(--mono);line-height:1.6}
+.filestatus{display:flex;gap:16px;flex-wrap:wrap;margin-top:12px;font-size:12px;font-family:var(--mono)}
+.filestatus .slot{color:var(--ink-faint)}
+.filestatus .slot.ok{color:var(--now)}
+.filestatus .slot b{font-family:var(--sans);font-weight:600;color:var(--ink)}
+.errorbox{margin-top:12px;border:1px solid var(--alert);background:#FBEEEC;border-radius:6px;
+  padding:12px 14px;font-size:12.5px;color:var(--ink);line-height:1.55}
+.errorbox b{color:var(--alert)}
+.errorbox .cols{font-family:var(--mono);font-size:11.5px;color:var(--ink-dim);margin-top:6px;word-break:break-word}
+.errorbox .fix{margin-top:9px;padding-top:9px;border-top:1px solid #E8D5D2}
+#resetlink{color:var(--now);text-decoration:none;margin-left:4px}
+#resetlink:hover{text-decoration:underline}
 footer{margin-top:26px;border-top:1px solid var(--line);padding-top:16px;
   font-size:12px;color:var(--ink-dim);max-width:760px}
 footer h3{font-size:12px;margin:0 0 6px;color:var(--ink)}
@@ -395,6 +435,254 @@ function filt(q){
   }
   document.getElementById('shown').textContent = shown;
 }
+
+// ---------------------------------------------------------------------------
+// Upload your own data. Everything below runs entirely in this browser tab -
+// pickpath_engine.js (embedded above) does the reading, the optimizing and
+// the SVG/table building, the same functions this page's own generation
+// script used to build the view you saw on load. No network call is made
+// anywhere in this file; that is the whole point of shipping it this way.
+// ---------------------------------------------------------------------------
+
+var SAMPLE = __SAMPLE__;
+var REFERENCE = __REFERENCE__;
+var pending = { locations: null, orders: null };
+
+// Rebuild the stats / map / table from a fresh (warehouse, orders, results)
+// triple - the same three things pick_path.py's CLI computes, just computed
+// here in JS instead. This is the one function both an upload and "reset to
+// sample" funnel through, so the two can never render differently.
+function renderResults(wh, orders, results, label, locName, ordName){
+  var totalWas = 0, totalNow = 0, totalLines = 0;
+  results.forEach(function(r){ totalWas += r.baseline_distance; totalNow += r.optimized_distance; totalLines += r.line_count; });
+  var totalSaved = totalWas - totalNow;
+  var totalPct = totalWas > 1e-9 ? 100 * totalSaved / totalWas : 0;
+  var pcts = results.map(function(r){ return r.pct_improvement; });
+  var bestPct = Math.max.apply(null, pcts);
+  var worstPct = Math.min.apply(null, pcts);
+  var sortedPcts = pcts.slice().sort(function(a, b){ return a - b; });
+  var mid = sortedPcts.length % 2
+    ? sortedPcts[(sortedPcts.length - 1) / 2]
+    : (sortedPcts[sortedPcts.length / 2 - 1] + sortedPcts[sortedPcts.length / 2]) / 2;
+  var under10 = pcts.filter(function(p){ return p < 10; }).length;
+
+  document.getElementById('stat-was').textContent = fmtInt(totalWas);
+  document.getElementById('stat-now').textContent = fmtInt(totalNow);
+  document.getElementById('stat-removed').textContent = fmtInt(totalSaved);
+  document.getElementById('stat-improvement').textContent = totalPct.toFixed(1);
+  document.getElementById('spreadline').innerHTML =
+    'Per order: best <span class="num">' + bestPct.toFixed(1) + '%</span>, median <span class="num">' +
+    mid.toFixed(1) + '%</span>, worst <span class="num">' + worstPct.toFixed(1) +
+    '%</span>. <span class="num">' + under10 + '</span> of <span class="num">' + results.length +
+    '</span> orders improve by less than 10% - those are already close to the shortest route.';
+
+  document.getElementById('tag').textContent = label;
+  document.getElementById('srcline').textContent =
+    locName + ' · ' + wh.pickSlotCount() + ' slots · ' + ordName + ' · ' +
+    results.length + ' orders · ' + totalLines + ' lines · generated ' + new Date().toLocaleString();
+
+  var plan = buildFloorPlan(wh);
+  var map = document.getElementById('map');
+  map.setAttribute('viewBox', '0 0 ' + Math.round(plan.width) + ' ' + Math.round(plan.height));
+  var groups = results.map(function(r){
+    var baseline = orders.get(r.order_id).map(function(l){ return l.location_id; });
+    return buildRouteGroup(plan, wh, r.order_id, baseline, r.optimized_sequence);
+  }).join('');
+  map.innerHTML = svgFloor(plan) + groups;
+
+  DATA = {};
+  results.forEach(function(r){
+    DATA[r.order_id] = { lines: r.line_count, stops: r.optimized_stops, was: fmtInt(r.baseline_distance),
+      now: fmtInt(r.optimized_distance), saved: fmtInt(r.saved), pct: r.pct_improvement.toFixed(1) };
+  });
+  document.getElementById('tbody').innerHTML = results.map(function(r){ return buildTableRow(r, bestPct); }).join('');
+
+  document.getElementById('total-count').textContent = results.length;
+  var filterBox = document.querySelector('.filter input');
+  if (filterBox) { filterBox.value = ''; }
+  filt('');
+  var heads = document.querySelectorAll('thead th');
+  for (var i = 0; i < heads.length; i++) { heads[i].removeAttribute('data-dir'); }
+  var toggleBtns = document.querySelectorAll('.toggle button');
+  mode('both', toggleBtns[0]);
+
+  pick(results[0].order_id);
+}
+
+function updateFileStatus(){
+  var el = document.getElementById('filestatus');
+  el.innerHTML =
+    '<span class="slot' + (pending.locations ? ' ok' : '') + '">Locations: <b>' +
+    (pending.locations ? escapeHtml(pending.locations.name) : 'not loaded yet') + '</b></span>' +
+    '<span class="slot' + (pending.orders ? ' ok' : '') + '">Orders: <b>' +
+    (pending.orders ? escapeHtml(pending.orders.name) : 'not loaded yet') + '</b></span>';
+}
+
+function hideError(){ document.getElementById('errorbox').hidden = true; }
+
+function describeFileError(fileLabel, err){
+  if (err instanceof ColumnError){
+    var extra;
+    if (err.missing.indexOf('x') >= 0 || err.missing.indexOf('y') >= 0){
+      extra = 'Location coordinates (x / y) are almost never in a WMS export as-is - they usually ' +
+        'have to be built from your aisle spacing and bay pitch. This is exactly what CLIENT_PROMPT.md ' +
+        'is for: open it in this folder and follow it with Claude Code (or claude.ai) to build a small ' +
+        'adapter for your export, then drop what it produces back in here.';
+    } else {
+      extra = 'This is normal for a real WMS export - the column names almost never match on the first ' +
+        'try. Open CLIENT_PROMPT.md in this folder and follow it with Claude Code (or claude.ai) to build ' +
+        'a small adapter for your column names, then drop what it produces back in here.';
+    }
+    return '<b>' + fileLabel + " doesn't have the columns this expects.</b>" +
+      '<div class="cols">Missing: ' + escapeHtml(err.missing.join(', ')) +
+      '<br>Found: ' + escapeHtml(err.found.join(', ')) + '</div>' +
+      '<div class="fix">' + extra + '</div>';
+  }
+  return '<b>' + fileLabel + ':</b> ' + escapeHtml(err.message);
+}
+
+function showError(kind, info){
+  var box = document.getElementById('errorbox');
+  var html;
+  if (kind === 'unrecognized'){
+    html = '<b>Not recognized:</b> ' + info.names.map(function(n){ return escapeHtml(n); }).join(', ') +
+      '<div class="cols">Expecting one file with location_id / aisle / bay / level / x / y, and one ' +
+      'file with order_id / line / location_id / sku / qty.</div>' +
+      '<div class="fix">If these came straight out of your WMS, this is expected - almost no export ' +
+      'already uses these exact column names, and coordinates in particular are rarely present at all. ' +
+      'Open CLIENT_PROMPT.md in this folder and follow it with Claude Code (or claude.ai) to build a ' +
+      'small adapter for your export, then drop what it produces back in here.</div>';
+  } else if (kind === 'read'){
+    html = '<b>Could not read the file:</b> ' + escapeHtml(info.message);
+  } else if (kind === 'join'){
+    var shown = info.missing.slice(0, 10).map(function(s){ return escapeHtml(s); }).join(', ');
+    var more = info.missing.length > 10 ? ' (+' + (info.missing.length - 10) + ' more)' : '';
+    html = '<b>' + info.missing.length + ' slot(s) picked but not in your location file:</b> ' + shown + more +
+      '<div class="fix">Check that both files came from the same export and cover the same date range.</div>';
+  } else {
+    html = describeFileError(kind === 'locations' ? 'Your locations file' : 'Your orders file', info.error);
+  }
+  box.innerHTML = html;
+  box.hidden = false;
+}
+
+function fileDetectType(text){
+  // Classify by SIGNATURE columns, not by requiring every column to already
+  // be present - a file requiring all six locations columns before it is
+  // even recognised as "a locations file" means a real export missing just
+  // one (x/y almost always, since a WMS rarely has them) always falls into
+  // the vague "not recognized as either" bucket instead of the precise
+  // "you're missing: x, y" one that readLocations() can give it. order_id,
+  // sku and qty essentially never appear in a location master, so their
+  // presence is a strong, cheap signal either way.
+  var parsed = parseCSV(text);
+  var have = new Set(parsed.header.map(function(h){ return h.trim().toLowerCase(); }));
+  if (have.has('order_id') || have.has('sku') || have.has('qty')) { return 'orders'; }
+  if (have.has('location_id')) { return 'locations'; }
+  return null;
+}
+
+function readFileText(file){
+  return new Promise(function(resolve, reject){
+    var reader = new FileReader();
+    reader.onload = function(){ resolve(reader.result); };
+    reader.onerror = function(){ reject(new Error('Could not read ' + file.name + ' - the browser refused to open it.')); };
+    reader.readAsText(file);
+  });
+}
+
+function tryCompute(){
+  var locations, orders, wh;
+  try { locations = readLocations(pending.locations.text, pending.locations.name); }
+  catch (e) { showError('locations', { error: e }); return; }
+  try { orders = readOrders(pending.orders.text, pending.orders.name); }
+  catch (e) { showError('orders', { error: e }); return; }
+
+  wh = makeWarehouse(locations);
+  var missing = new Set();
+  orders.forEach(function(lines){
+    lines.forEach(function(line){ if (!locations.has(line.location_id)) { missing.add(line.location_id); } });
+  });
+  if (missing.size){
+    showError('join', { missing: Array.from(missing).sort(codePointCompare) });
+    return;
+  }
+
+  var orderIds = Array.from(orders.keys()).sort(codePointCompare);
+  var results = orderIds.map(function(id){ return optimizeOrder(wh, orders.get(id)); });
+
+  hideError();
+  renderResults(wh, orders, results, 'Your data', pending.locations.name, pending.orders.name);
+  document.getElementById('datasource').textContent = pending.locations.name + ' + ' + pending.orders.name;
+  document.getElementById('resetlink').hidden = false;
+}
+
+function handleFiles(fileList){
+  hideError();
+  var files = Array.prototype.slice.call(fileList).filter(function(f){ return /\\.csv$/i.test(f.name) || f.type.indexOf('csv') >= 0 || f.type === ''; });
+  if (!files.length){ return; }
+  Promise.all(files.map(readFileText)).then(function(texts){
+    var unrecognized = [];
+    files.forEach(function(file, i){
+      var kind;
+      try { kind = fileDetectType(texts[i]); } catch (e) { kind = null; }
+      if (kind === 'locations') { pending.locations = { name: file.name, text: texts[i] }; }
+      else if (kind === 'orders') { pending.orders = { name: file.name, text: texts[i] }; }
+      else { unrecognized.push(file.name); }
+    });
+    updateFileStatus();
+    if (unrecognized.length){ showError('unrecognized', { names: unrecognized }); }
+    if (pending.locations && pending.orders){ tryCompute(); }
+  }).catch(function(e){
+    showError('read', { message: e.message });
+  });
+}
+
+function resetToSample(e){
+  if (e) { e.preventDefault(); }
+  pending = { locations: null, orders: null };
+  updateFileStatus();
+  hideError();
+
+  var locations = readLocations(SAMPLE.locations, 'locations.csv');
+  var orders = readOrders(SAMPLE.orders, 'orders.csv');
+  var wh = makeWarehouse(locations);
+  var orderIds = Array.from(orders.keys()).sort(codePointCompare);
+  var results = orderIds.map(function(id){ return optimizeOrder(wh, orders.get(id)); });
+
+  // Quiet drift check: does the JS engine agree with what pick_path.py
+  // computed for this exact sample at generation time? Console-only - an
+  // internal engineering assertion has no business surfacing to a client.
+  var totalWas = 0, totalNow = 0;
+  results.forEach(function(r){ totalWas += r.baseline_distance; totalNow += r.optimized_distance; });
+  var totalPct = totalWas > 1e-9 ? 100 * (totalWas - totalNow) / totalWas : 0;
+  if (Math.abs(totalPct - REFERENCE.total_pct) > 0.05){
+    console.error('pickpath: the browser engine disagrees with the Python reference for the sample data.',
+      { js_pct: totalPct, python_pct: REFERENCE.total_pct });
+  }
+
+  renderResults(wh, orders, results, 'Synthetic sample data', 'locations.csv', 'orders.csv');
+  document.getElementById('datasource').textContent = 'the synthetic sample data';
+  document.getElementById('resetlink').hidden = true;
+}
+
+function initUpload(){
+  var dz = document.getElementById('dropzone');
+  var input = document.getElementById('fileInput');
+  updateFileStatus();
+  dz.addEventListener('click', function(){ input.click(); });
+  dz.addEventListener('keydown', function(e){ if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); input.click(); } });
+  input.addEventListener('change', function(){ if (input.files.length) { handleFiles(input.files); } input.value = ''; });
+  ['dragenter','dragover'].forEach(function(evt){
+    dz.addEventListener(evt, function(e){ e.preventDefault(); e.stopPropagation(); dz.classList.add('drag'); });
+  });
+  ['dragleave','drop'].forEach(function(evt){
+    dz.addEventListener(evt, function(e){ e.preventDefault(); e.stopPropagation(); dz.classList.remove('drag'); });
+  });
+  dz.addEventListener('drop', function(e){
+    if (e.dataTransfer && e.dataTransfer.files.length) { handleFiles(e.dataTransfer.files); }
+  });
+}
 """
 
 
@@ -404,7 +692,9 @@ def build_html(warehouse: pp.Warehouse,
                plan: FloorPlan,
                data_label: str,
                loc_path: Path,
-               ord_path: Path) -> str:
+               ord_path: Path,
+               locations_raw: str,
+               orders_raw: str) -> str:
     """Assemble the whole page as one string."""
 
     total_was = sum(r.baseline_distance for r in results)
@@ -464,7 +754,22 @@ def build_html(warehouse: pp.Warehouse,
 
     first = results[0].order_id
     generated = datetime.now().strftime("%d %b %Y, %H:%M")
-    script = JS.replace("__DATA__", json.dumps(payload))
+
+    # What "reset to sample" recomputes from, and what its silent drift check
+    # compares against - the exact numbers this same generation run already
+    # produced for the sample data via pick_path.py, so the two engines are
+    # checked against each other every time the page is rebuilt, not just
+    # when someone remembers to run the JS test suite.
+    engine_js = ENGINE_JS_PATH.read_text(encoding="utf-8")
+    sample_json = _safe_json({"locations": locations_raw, "orders": orders_raw})
+    reference_json = _safe_json({"total_pct": round(total_pct, 4)})
+
+    script = (
+        engine_js + "\n"
+        + JS.replace("__DATA__", _safe_json(payload))
+              .replace("__SAMPLE__", sample_json)
+              .replace("__REFERENCE__", reference_json)
+    )
 
     return f"""<!DOCTYPE html>
 <html lang="en"><head><meta charset="utf-8">
@@ -477,28 +782,49 @@ def build_html(warehouse: pp.Warehouse,
   <h1>Every order travels further than it needs to. Here is how much further.</h1>
   <p class="sub">Each pick order routed twice - once in the sequence the system issued,
   once re-sequenced - measured with the same distance model.</p>
-  <p class="src"><span class="tag">{html.escape(data_label)}</span>
-  {html.escape(loc_path.name)} · {warehouse.pick_slot_count()} slots ·
+  <p class="src"><span class="tag" id="tag">{html.escape(data_label)}</span>
+  <span id="srcline">{html.escape(loc_path.name)} · {warehouse.pick_slot_count()} slots ·
   {html.escape(ord_path.name)} · {len(results)} orders · {total_lines} lines ·
-  generated {generated}</p>
+  generated {generated}</span></p>
 </header>
 
 <div class="stats">
   <div class="stat"><div class="k">Travelled as issued</div>
-    <div class="v">{total_was:,.0f}<span class="u">ft</span></div></div>
+    <div class="v"><span id="stat-was">{total_was:,.0f}</span><span class="u">ft</span></div></div>
   <div class="stat"><div class="k">Travelled optimized</div>
-    <div class="v">{total_now:,.0f}<span class="u">ft</span></div></div>
+    <div class="v"><span id="stat-now">{total_now:,.0f}</span><span class="u">ft</span></div></div>
   <div class="stat"><div class="k">Removed</div>
-    <div class="v">{total_saved:,.0f}<span class="u">ft</span></div></div>
+    <div class="v"><span id="stat-removed">{total_saved:,.0f}</span><span class="u">ft</span></div></div>
   <div class="stat"><div class="k">Improvement</div>
-    <div class="v">{total_pct:.1f}<span class="u">%</span></div></div>
+    <div class="v"><span id="stat-improvement">{total_pct:.1f}</span><span class="u">%</span></div></div>
 </div>
-<p class="spread">Per order: best <span class="num">{max(pcts):.1f}%</span>,
+<p class="spread" id="spreadline">Per order: best <span class="num">{max(pcts):.1f}%</span>,
 median <span class="num">{statistics.median(pcts):.1f}%</span>,
 worst <span class="num">{min(pcts):.1f}%</span>.
 <span class="num">{sum(1 for p in pcts if p < 10)}</span> of
 <span class="num">{len(pcts)}</span> orders improve by less than 10% - those are already
 close to the shortest route.</p>
+
+<div class="panel upload">
+  <div class="phead">
+    <h2>Try it on your own data</h2>
+    <span class="note">free · runs in your browser · nothing is uploaded anywhere</span>
+  </div>
+  <div class="uploadbody">
+    <label class="dropzone" id="dropzone" tabindex="0">
+      <input type="file" id="fileInput" accept=".csv,text/csv" multiple hidden>
+      <div class="dz-icon">&#8679;</div>
+      <div class="dz-text">Drop your two CSV files here, or click to browse</div>
+      <div class="dz-hint">one file with location_id, aisle, bay, level, x, y ·
+      one file with order_id, line, location_id, sku, qty<br>
+      column names are matched automatically and case does not matter</div>
+    </label>
+    <div class="filestatus" id="filestatus"></div>
+    <div class="errorbox" id="errorbox" hidden></div>
+  </div>
+  <div class="caption">Currently showing: <b id="datasource">the synthetic sample data</b>.
+    <a href="#" id="resetlink" onclick="resetToSample(event)" hidden>Reset to sample data</a></div>
+</div>
 
 <div class="stack">
   <div class="panel">
@@ -530,7 +856,7 @@ close to the shortest route.</p>
       <div class="filter">
         <input type="search" placeholder="order or slot…" oninput="filt(this.value)"
                aria-label="Filter by order id or slot label">
-        <span class="cnt"><span id="shown">{len(results)}</span> of {len(results)}</span>
+        <span class="cnt"><span id="shown">{len(results)}</span> of <span id="total-count">{len(results)}</span></span>
       </div>
     </div>
     <div class="tablewrap">
@@ -570,6 +896,7 @@ close to the shortest route.</p>
 
 </div>
 <script>{script}
+initUpload();
 pick('{first}');
 </script>
 </body></html>
@@ -610,7 +937,11 @@ def main() -> None:
     results = [pp.optimize_order(warehouse, lines) for _, lines in sorted(orders.items())]
     plan = FloorPlan(warehouse)
 
-    page = build_html(warehouse, results, orders, plan, args.data_label, args.locations, args.orders)
+    locations_raw = args.locations.read_text(encoding="utf-8-sig")
+    orders_raw = args.orders.read_text(encoding="utf-8-sig")
+
+    page = build_html(warehouse, results, orders, plan, args.data_label, args.locations, args.orders,
+                      locations_raw, orders_raw)
     args.out.write_text(page, encoding="utf-8")
 
     size_kb = args.out.stat().st_size / 1024
