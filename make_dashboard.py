@@ -85,11 +85,10 @@ def travel_waypoints(warehouse: pp.Warehouse, from_id: str, to_id: str) -> list[
     if a.aisle == b.aisle:
         return [(a.x, a.y), (b.x, b.y)]
 
-    # Take whichever end of the building is the shorter way round - the same
-    # choice the distance function makes.
-    out_front = (a.y - warehouse.front_y) + (b.y - warehouse.front_y)
-    out_back = (warehouse.back_y - a.y) + (warehouse.back_y - b.y)
-    cross_y = warehouse.front_y if out_front <= out_back else warehouse.back_y
+    # Take whichever declared cross-aisle is the shorter way round - the same
+    # choice the distance function makes, so the line drawn is always exactly
+    # as long as the number reported for it.
+    cross_y = min(warehouse.cross_aisles, key=lambda y: abs(a.y - y) + abs(b.y - y))
 
     return [(a.x, a.y), (a.x, cross_y), (b.x, cross_y), (b.x, b.y)]
 
@@ -148,11 +147,18 @@ class FloorPlan:
         return sorted(seen.items(), key=lambda pair: pair[1])
 
 
-def rack_blocks(plan: FloorPlan) -> list[tuple[float, float]]:
-    """The x ranges where racking sits - the strips a truck cannot drive through.
+def rack_blocks(plan: FloorPlan) -> list[tuple[float, float, float, float]]:
+    """The rectangles where racking sits - the shapes a route line must go around.
 
-    Racking fills the space between one aisle corridor and the next. If there is
-    only one aisle there is no racking to draw.
+    Racking fills the space between one aisle corridor and the next, split
+    into one segment per gap between consecutive cross-aisles so a
+    mid-building cross-over (a wide tunnel dividing the racking) leaves a
+    visible gap rather than being drawn straight through it. With only the
+    default front/back cross-aisles this is exactly one segment per gap,
+    same as before.
+
+    Returns (left_x, right_x, near_edge_y, far_edge_y) - near_edge_y is
+    always the smaller warehouse-y value (closer to the front).
     """
     columns = [x for _, x in plan.aisle_columns()]
     if len(columns) < 2:
@@ -160,13 +166,20 @@ def rack_blocks(plan: FloorPlan) -> list[tuple[float, float]]:
 
     gaps = [columns[i + 1] - columns[i] for i in range(len(columns) - 1)]
     corridor = min(gaps) * CORRIDOR_FRACTION
+    inset = (plan.max_y - plan.min_y) * 0.03
+    cross = sorted(plan.warehouse.cross_aisles)
 
     blocks = []
     for i in range(len(columns) - 1):
         left = columns[i] + corridor
         right = columns[i + 1] - corridor
-        if right > left:
-            blocks.append((left, right))
+        if right <= left:
+            continue
+        for j in range(len(cross) - 1):
+            near_edge = cross[j] + inset
+            far_edge = cross[j + 1] - inset
+            if far_edge > near_edge:
+                blocks.append((left, right, near_edge, far_edge))
     return blocks
 
 
@@ -180,12 +193,23 @@ def svg_floor(plan: FloorPlan) -> str:
     parts: list[str] = []
 
     depth = plan.max_y - plan.min_y
-    inset = depth * 0.03          # keeps racking clear of the cross-aisles
 
-    # Cross-aisle strips at the front and the back, so it is obvious where a
-    # truck is allowed to change aisle.
+    # Cross-aisle strips, one per declared crossing - front and back always,
+    # plus any mid-building cross-over this warehouse was built with - so it
+    # is obvious everywhere a truck is allowed to change aisle. First and
+    # last get FRONT/BACK labels; anything in between is just CROSS-AISLE,
+    # since "middle" is not always literally where it sits.
     band = max(plan.scale * (depth * 0.045), 9.0)
-    for label, y_at in (("FRONT CROSS-AISLE", plan.min_y), ("BACK CROSS-AISLE", plan.max_y)):
+    cross = sorted(wh.cross_aisles)
+    for idx, y_at in enumerate(cross):
+        if len(cross) == 1:
+            label = "CROSS-AISLE"
+        elif idx == 0:
+            label = "FRONT CROSS-AISLE"
+        elif idx == len(cross) - 1:
+            label = "BACK CROSS-AISLE"
+        else:
+            label = "CROSS-AISLE"
         cy = plan.sy(y_at)
         parts.append(
             f'<rect class="crossaisle" x="{plan.sx(plan.min_x):.1f}" y="{cy - band / 2:.1f}" '
@@ -196,13 +220,15 @@ def svg_floor(plan: FloorPlan) -> str:
             f'y="{cy - band / 2 - 5:.1f}" text-anchor="end">{label}</text>'
         )
 
-    # Racking. These are the blocks the route lines have to go around.
-    top = plan.sy(plan.max_y - inset)
-    bottom = plan.sy(plan.min_y + inset)
-    for left, right in rack_blocks(plan):
+    # Racking. These are the blocks the route lines have to go around - one
+    # segment per gap between consecutive cross-aisles, so a mid-building
+    # cross-over shows as a real gap in the racking, not a line drawn through it.
+    for left, right, near_edge, far_edge in rack_blocks(plan):
+        svg_top = plan.sy(far_edge)
+        svg_bottom = plan.sy(near_edge)
         parts.append(
-            f'<rect class="rack" x="{plan.sx(left):.1f}" y="{top:.1f}" '
-            f'width="{(right - left) * plan.scale:.1f}" height="{bottom - top:.1f}" rx="2"/>'
+            f'<rect class="rack" x="{plan.sx(left):.1f}" y="{svg_top:.1f}" '
+            f'width="{(right - left) * plan.scale:.1f}" height="{(svg_bottom - svg_top):.1f}" rx="2"/>'
         )
 
     # Aisle numbers along the bottom.
@@ -384,6 +410,45 @@ td.seq{font-family:var(--mono);font-size:11px;color:var(--ink-faint);
 .dimsCaveat{font-size:11.5px;color:var(--ink-faint);margin:12px 0 0;line-height:1.55;
   border-top:1px solid #DCEBEA;padding-top:10px}
 .dimsCaveat code{font-family:var(--mono);background:var(--panel);padding:1px 4px;border-radius:3px}
+
+.crossList{margin-top:14px;padding-top:12px;border-top:1px solid #DCEBEA}
+.crossListLabel{font-size:11.5px;color:var(--ink-dim);display:block;margin-bottom:8px;line-height:1.5}
+.crossRow{display:flex;gap:8px;align-items:center;margin-bottom:6px}
+.crossRow input{font-family:var(--mono);font-size:12.5px;padding:5px 8px;width:100px;
+  border:1px solid var(--line);border-radius:4px;background:var(--panel);color:var(--ink)}
+.crossRow input:focus{outline:none;border-color:var(--now)}
+.crossRow .unit{font-size:11.5px;color:var(--ink-faint)}
+.crossRow .removeCross{border:none;background:none;color:var(--ink-faint);cursor:pointer;
+  font-size:16px;line-height:1;padding:2px 6px}
+.crossRow .removeCross:hover{color:var(--alert)}
+.addCrossBtn{font-family:var(--sans);font-size:12px;color:var(--now);background:none;
+  border:1px dashed var(--now);border-radius:4px;padding:5px 10px;cursor:pointer}
+.addCrossBtn:hover{background:#F2F8F8}
+
+.warehouseBuilder{margin-top:16px}
+.wbGrid{display:grid;grid-template-columns:repeat(2,1fr);gap:14px;margin:14px 0}
+.wbGrid label{font-size:11.5px;color:var(--ink-dim);display:flex;flex-direction:column;gap:4px}
+.wbGrid input{font-family:var(--mono);font-size:13px;padding:6px 9px;
+  border:1px solid var(--line);border-radius:4px;background:var(--panel);color:var(--ink)}
+.wbGrid input:focus{outline:none;border-color:var(--now)}
+.wbActions{display:flex;gap:10px;margin-top:14px;flex-wrap:wrap}
+.wbActions button{font-family:var(--sans);font-size:12.5px;font-weight:600;padding:7px 14px;
+  border-radius:4px;cursor:pointer}
+.wbActions .primary{border:1px solid var(--now);background:var(--now);color:#fff}
+.wbActions .primary:hover{opacity:.9}
+.wbActions .secondary{border:1px solid var(--line);background:var(--panel);color:var(--ink)}
+.wbActions .secondary:disabled{color:var(--ink-faint);cursor:not-allowed}
+.wbActions .secondary:not(:disabled):hover{border-color:var(--now);color:var(--now)}
+.wbPreviewWrap{margin-top:16px;border-top:1px solid var(--line-soft);padding-top:14px}
+.wbPreviewWrap svg{display:block;width:100%;height:auto;background:var(--ground);
+  border:1px solid var(--line);border-radius:4px}
+.wbPreviewWrap svg .rack{fill:var(--rack);stroke:var(--rack-line);stroke-width:1}
+.wbPreviewWrap svg .crossaisle{fill:#F2EFEA;stroke:none}
+.wbPreviewWrap svg .bandlabel{font-family:var(--mono);font-size:8.5px;fill:var(--ink-faint);letter-spacing:.08em}
+.wbPreviewWrap svg .aislelabel{font-family:var(--mono);font-size:10px;fill:var(--ink-faint)}
+.wbPreviewWrap svg .depot{fill:var(--ink);stroke:none}
+.wbPreviewWrap svg .depotlabel{font-family:var(--mono);font-size:9px;fill:var(--ink-dim);letter-spacing:.05em}
+.wbCaption{font-size:11.5px;color:var(--ink-faint);margin-top:8px;line-height:1.5}
 footer{margin-top:26px;border-top:1px solid var(--line);padding-top:16px;
   font-size:12px;color:var(--ink-dim);max-width:760px}
 footer h3{font-size:12px;margin:0 0 6px;color:var(--ink)}
@@ -678,12 +743,13 @@ function buildFromDimensions(){
   catch (e) { showError('locations', { error: e }); return; }
 
   var locations = locationsMapFrom(deriveXY(coreRows, spacing, pitch));
+  var crossAisles = getCrossAisleValues('crossListRows_dims');
 
   var orders;
   try { orders = readOrders(pending.orders.text, pending.orders.name); }
   catch (e) { showError('orders', { error: e }); return; }
 
-  var wh = makeWarehouse(locations);
+  var wh = makeWarehouse(locations, crossAisles);
   var missing = new Set();
   orders.forEach(function(lines){
     lines.forEach(function(line){ if (!locations.has(line.location_id)) { missing.add(line.location_id); } });
@@ -698,9 +764,127 @@ function buildFromDimensions(){
 
   hideError();
   renderResults(wh, orders, results, 'Your data - estimated', pending.locations.name, pending.orders.name);
+  var crossNote = crossAisles.length ? ', ' + crossAisles.length + ' mid cross-aisle' + (crossAisles.length > 1 ? 's' : '') : '';
   document.getElementById('datasource').textContent = pending.locations.name + ' + ' + pending.orders.name +
-    ' (coordinates estimated: ' + spacing + ' ft aisles, ' + pitch + ' ft bays)';
+    ' (coordinates estimated: ' + spacing + ' ft aisles, ' + pitch + ' ft bays' + crossNote + ')';
   document.getElementById('resetlink').hidden = false;
+}
+
+// ---------------------------------------------------------------------------
+// Shared cross-aisle list control - used by both Section 1's recovery panel
+// and Section 2's warehouse builder below. A row is just a labelled number
+// input plus a remove button; getCrossAisleValues() reads whatever is
+// currently in a given container, skipping blanks, so an empty or half-filled
+// list never throws - it just contributes nothing extra beyond front/back.
+// ---------------------------------------------------------------------------
+
+function addCrossAisleRow(containerId){
+  var container = document.getElementById(containerId);
+  var row = document.createElement('div');
+  row.className = 'crossRow';
+  row.innerHTML = '<input type="number" step="0.1" placeholder="e.g. 45" aria-label="Cross-aisle position in feet from the front">' +
+    '<span class="unit">ft from the front</span>' +
+    '<button type="button" class="removeCross" aria-label="Remove this cross-aisle" onclick="this.parentElement.remove()">&times;</button>';
+  container.appendChild(row);
+  row.querySelector('input').focus();
+}
+
+function getCrossAisleValues(containerId){
+  var inputs = document.querySelectorAll('#' + containerId + ' input');
+  var values = [];
+  inputs.forEach(function(input){
+    var v = parseFloat(input.value);
+    if (!isNaN(v)) { values.push(v); }
+  });
+  return values;
+}
+
+// ---------------------------------------------------------------------------
+// Section 2 - describe a warehouse from scratch, no file needed. Builds
+// generic location rows (A01-B01, ...) through the same deriveXY() the
+// upload recovery path uses, so the math is identical either way - only
+// where the aisle/bay labels come from differs.
+// ---------------------------------------------------------------------------
+
+var lastBuiltWarehouse = null;   // {locations, aisleSpacing, bayPitch} - set by previewWarehouseShape(), read by downloadWarehouseCsv()
+
+function buildManualRows(aisleCount, bayCount){
+  var rows = [];
+  for (var a = 1; a <= aisleCount; a++){
+    for (var b = 1; b <= bayCount; b++){
+      rows.push({
+        location_id: 'A' + String(a).padStart(2, '0') + '-B' + String(b).padStart(2, '0'),
+        aisle: a, bay: b, level: 1,
+      });
+    }
+  }
+  return rows;
+}
+
+function hideWbError(){ document.getElementById('wbErrorbox').hidden = true; }
+function showWbError(message){
+  var box = document.getElementById('wbErrorbox');
+  box.innerHTML = '<b>' + escapeHtml(message) + '</b>';
+  box.hidden = false;
+}
+
+function previewWarehouseShape(){
+  hideWbError();
+  var aisleCount = parseInt(document.getElementById('wbAisleCount').value, 10);
+  var aisleSpacing = parseFloat(document.getElementById('wbAisleSpacing').value);
+  var bayCount = parseInt(document.getElementById('wbBayCount').value, 10);
+  var bayPitch = parseFloat(document.getElementById('wbBayPitch').value);
+
+  if (!(aisleCount > 0) || !(bayCount > 0) || !(aisleSpacing > 0) || !(bayPitch > 0)){
+    showWbError('Enter a positive number for all four fields - aisle count, aisle spacing, bays per aisle, and bay pitch.');
+    document.getElementById('wbPreviewWrap').hidden = true;
+    document.getElementById('wbDownloadBtn').disabled = true;
+    return;
+  }
+
+  var rows = buildManualRows(aisleCount, bayCount);
+  var derived = deriveXY(rows, aisleSpacing, bayPitch);
+  // A depot at the front-left corner, one aisle-width out - matches where
+  // the sample data's own STAGING sits, so the preview does not default to
+  // a bare rack corner with nowhere obvious to start.
+  derived.push({ location_id: 'STAGING', aisle: 0, bay: 0, level: 0, x: -aisleSpacing, y: 0 });
+
+  var locations = locationsMapFrom(derived);
+  var crossAisles = getCrossAisleValues('crossListRows_wb');
+  var wh = makeWarehouse(locations, crossAisles);
+  var plan = buildFloorPlan(wh);
+
+  var svg = document.getElementById('wbPreviewSvg');
+  svg.setAttribute('viewBox', '0 0 ' + Math.round(plan.width) + ' ' + Math.round(plan.height));
+  svg.innerHTML = svgFloor(plan);
+  document.getElementById('wbPreviewWrap').hidden = false;
+
+  var crossNote = crossAisles.length
+    ? crossAisles.length + ' mid cross-aisle' + (crossAisles.length > 1 ? 's' : '') + ' plus front and back'
+    : 'front and back only';
+  document.getElementById('wbCaption').textContent =
+    aisleCount + ' aisles at ' + aisleSpacing + ' ft, ' + bayCount + ' bays at ' + bayPitch + ' ft, ' +
+    crossNote + '. Does this look like your warehouse? If not, adjust the numbers above and preview again.';
+
+  lastBuiltWarehouse = { locations: locations, aisleSpacing: aisleSpacing, bayPitch: bayPitch };
+  document.getElementById('wbDownloadBtn').disabled = false;
+}
+
+function downloadWarehouseCsv(){
+  if (!lastBuiltWarehouse){ return; }
+  var rows = ['location_id,aisle,bay,level,x,y'];
+  lastBuiltWarehouse.locations.forEach(function(loc){
+    rows.push([loc.location_id, loc.aisle, loc.bay, loc.level, loc.x, loc.y].join(','));
+  });
+  var blob = new Blob([rows.join('\\n') + '\\n'], { type: 'text/csv' });
+  var url = URL.createObjectURL(blob);
+  var a = document.createElement('a');
+  a.href = url;
+  a.download = 'locations.csv';
+  document.body.appendChild(a);
+  a.click();
+  document.body.removeChild(a);
+  URL.revokeObjectURL(url);
 }
 
 function handleFiles(fileList){
@@ -732,6 +916,7 @@ function resetToSample(e){
   hideDimsPanel();
   document.getElementById('aisleSpacingInput').value = '';
   document.getElementById('bayPitchInput').value = '';
+  document.getElementById('crossListRows_dims').innerHTML = '';
 
   var locations = readLocations(SAMPLE.locations, 'locations.csv');
   var orders = readOrders(SAMPLE.orders, 'orders.csv');
@@ -902,7 +1087,7 @@ close to the shortest route.</p>
 
 <div class="panel upload">
   <div class="phead">
-    <h2>Try it on your own data</h2>
+    <h2>1. Optimize your pick orders</h2>
     <span class="note">free · runs in your browser · nothing is uploaded anywhere</span>
   </div>
   <div class="uploadbody">
@@ -930,15 +1115,67 @@ close to the shortest route.</p>
         </label>
         <button type="button" id="buildDimsBtn" onclick="buildFromDimensions()">Build floor plan</button>
       </div>
+      <div class="crossList">
+        <span class="crossListLabel">Mid-building cross-aisles (optional) - a wide tunnel that lets a
+          truck change aisles without going all the way to the front or back. Front and back are
+          always included automatically; only add the extra one(s) your building has.</span>
+        <div id="crossListRows_dims"></div>
+        <button type="button" class="addCrossBtn" onclick="addCrossAisleRow('crossListRows_dims')">+ Add cross-aisle</button>
+      </div>
       <p class="dimsCaveat">This assumes uniform spacing and aisle numbers running left to right, the
-        same as pacing off one aisle and multiplying. If your building has uneven aisle widths,
-        one-way aisles, multiple docks, or zones, this estimate will be wrong in ways that matter -
-        use <code>CLIENT_PROMPT.md</code> with Claude Code for those. Paced out a real aisle and got a
+        same as pacing off one aisle and multiplying. If your building has uneven aisle widths or
+        one-way aisles, this estimate will be wrong in ways that matter - use
+        <code>CLIENT_PROMPT.md</code> with Claude Code for those. Paced out a real aisle and got a
         different number? Change it above and build again - the map updates instantly.</p>
     </div>
   </div>
   <div class="caption">Currently showing: <b id="datasource">the synthetic sample data</b>.
     <a href="#" id="resetlink" onclick="resetToSample(event)" hidden>Reset to sample data</a></div>
+</div>
+
+<div class="panel upload warehouseBuilder">
+  <div class="phead">
+    <h2>2. Describe your warehouse</h2>
+    <span class="note">free · runs in your browser · nothing is uploaded anywhere</span>
+  </div>
+  <div class="uploadbody">
+    <p class="dimsNote">Every warehouse is laid out differently. Build a floor plan here from
+      scratch - aisle count, spacing, and any mid-building cross-aisles - see it drawn
+      immediately, and download a <code>locations.csv</code> you can drop into Section 1 above.
+      This uses generic slot labels (A01-B01, and so on); if you already have a locations file
+      with your own labels, use the "build floor plan" recovery in Section 1 instead - this tool
+      is for previewing a layout, not relabelling one you already have.</p>
+    <div class="wbGrid">
+      <label>Number of aisles
+        <input type="number" id="wbAisleCount" min="1" step="1" placeholder="e.g. 10">
+      </label>
+      <label>Distance between aisle centers (ft)
+        <input type="number" id="wbAisleSpacing" min="0.1" step="0.1" placeholder="e.g. 12">
+      </label>
+      <label>Bays per aisle
+        <input type="number" id="wbBayCount" min="1" step="1" placeholder="e.g. 10">
+      </label>
+      <label>Distance between bay centers (ft)
+        <input type="number" id="wbBayPitch" min="0.1" step="0.1" placeholder="e.g. 10">
+      </label>
+    </div>
+    <div class="crossList">
+      <span class="crossListLabel">Mid-building cross-aisles (optional) - feet from the front,
+        where racking is split by a tunnel wide enough to change aisles in. Front and back are
+        always included automatically.</span>
+      <div id="crossListRows_wb"></div>
+      <button type="button" class="addCrossBtn" onclick="addCrossAisleRow('crossListRows_wb')">+ Add cross-aisle</button>
+    </div>
+    <div class="wbActions">
+      <button type="button" class="primary" onclick="previewWarehouseShape()">Preview floor plan</button>
+      <button type="button" class="secondary" id="wbDownloadBtn" onclick="downloadWarehouseCsv()" disabled>Download locations.csv</button>
+    </div>
+    <div class="errorbox" id="wbErrorbox" hidden></div>
+    <div class="wbPreviewWrap" id="wbPreviewWrap" hidden>
+      <svg id="wbPreviewSvg" viewBox="0 0 100 100" role="img" aria-label="Preview of the warehouse shape described above"></svg>
+      <p class="wbCaption" id="wbCaption"></p>
+    </div>
+  </div>
 </div>
 
 <div class="stack">
@@ -1027,6 +1264,10 @@ def main() -> None:
     parser.add_argument("--out", type=Path, default=here / "dashboard.html")
     parser.add_argument("--data-label", default="Synthetic sample data",
                         help="shown on the page so nobody mistakes sample output for a real run")
+    parser.add_argument("--cross-aisle", type=float, action="append", dest="cross_aisles",
+                        metavar="Y_FEET",
+                        help="a mid-building cross-aisle position, in the same y feet as "
+                             "locations.csv (repeatable). Front and back are always included.")
     args = parser.parse_args()
 
     for path in (args.locations, args.orders):
@@ -1035,7 +1276,7 @@ def main() -> None:
 
     locations = pp.read_locations(args.locations)
     orders = pp.read_orders(args.orders)
-    warehouse = pp.Warehouse(locations)
+    warehouse = pp.Warehouse(locations, cross_aisles=args.cross_aisles)
 
     unknown = sorted({
         line.location_id

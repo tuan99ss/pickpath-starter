@@ -174,9 +174,15 @@ adjust the model to match what I tell you:
     the length of a bay, and whatever else the drawing or my answers do not resolve.
 - **Aisle spacing.** Are all my aisles the same distance apart? Wide bulk aisles and
   narrow case-pick aisles change the cross-aisle math.
-- **Cross-aisles.** Are there mid-building cross-overs, or only at the ends? If there
-  are middle cross-aisles, the starter's distance function is wrong for my building and
-  needs to account for them — tell me that plainly and fix it.
+- **Cross-aisles.** Are there mid-building cross-overs, or only at the ends? One or more,
+  at any position, is already self-service — I do not need you for this: repeated
+  `--cross-aisle Y_FEET` on the command line (`pick_path.py` and `make_dashboard.py`
+  both take it), or the "Mid-building cross-aisles" box in dashboard.html (Section 1's
+  floor-plan builder, and Section 2's from-scratch warehouse builder), where I can add
+  as many as I need and see each one drawn as a real gap in the racking before trusting
+  it. What genuinely needs you: a cross-aisle that does not run the full width of the
+  building (this tool assumes every declared one does), or anything past "one or more
+  straight tunnels, full width."
 - **One-way aisles.** Any aisles that can only be entered from one end, or travelled in
   one direction? Forklift traffic rules count here. One-way aisles break the assumption
   that distance is the same in both directions, and that changes how the route is built,

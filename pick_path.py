@@ -215,15 +215,28 @@ class Warehouse:
     """Holds the floor layout and answers 'how far is it from A to B?'.
 
     The geometry is taken from the data, not hard-coded:
-      - the front cross-aisle runs level with the frontmost bay in the file
-      - the back cross-aisle runs level with the rearmost bay in the file
+      - by default there are two cross-aisles: one level with the frontmost
+        bay in the file, one level with the rearmost bay
+      - a building with a mid-aisle cross-over (a wide tunnel that splits the
+        racking, common in bigger buildings) passes its y-position in
+        cross_aisles instead; front and back are still included automatically
     """
 
-    def __init__(self, locations: dict[str, Location]) -> None:
+    def __init__(self, locations: dict[str, Location], cross_aisles: list[float] | None = None) -> None:
         self.locations = locations
         all_y = [loc.y for loc in locations.values()]
         self.front_y = min(all_y)
         self.back_y = max(all_y)
+
+        # Every declared cross-aisle a picker can change aisles at. Default is
+        # just the two ends - the only case the tool used to support. Passing
+        # extra positions is what makes a mid-building cross-over correct:
+        # without it, the model would insist on a trip all the way to an end
+        # even when a much shorter crossing sits in between.
+        if cross_aisles:
+            self.cross_aisles = sorted(set(cross_aisles) | {self.front_y, self.back_y})
+        else:
+            self.cross_aisles = [self.front_y, self.back_y]
 
         # Where the operator starts and finishes. Prefer the named staging row;
         # otherwise fall back to the front-left corner of the rack block.
@@ -246,8 +259,9 @@ class Warehouse:
 
         Same aisle  -> drive straight along the aisle.
         Different aisle -> you cannot cut through the rack, so you travel out to
-        a cross-aisle, along it, and back in. There is a cross-aisle at the
-        front and one at the back; the operator takes whichever is shorter.
+        a cross-aisle, along it, and back in. The operator takes whichever
+        declared cross-aisle is shortest - front, back, or any mid-building
+        cross-over this warehouse was built with.
         """
         a = self.locations[from_id]
         b = self.locations[to_id]
@@ -256,9 +270,8 @@ class Warehouse:
             return abs(a.y - b.y)
 
         across = abs(a.x - b.x)                       # travel along a cross-aisle
-        out_front = (a.y - self.front_y) + (b.y - self.front_y)
-        out_back = (self.back_y - a.y) + (self.back_y - b.y)
-        return across + min(out_front, out_back)
+        via = min(abs(a.y - y) + abs(b.y - y) for y in self.cross_aisles)
+        return across + via
 
     def route_distance(self, sequence: list[str]) -> float:
         """Total feet for a full trip, including out from and back to staging."""
@@ -505,6 +518,11 @@ def main() -> None:
                         help="where to write the results CSV (default: results.csv)")
     parser.add_argument("--detail", action="store_true",
                         help="print the optimized sequence for every order")
+    parser.add_argument("--cross-aisle", type=float, action="append", dest="cross_aisles",
+                        metavar="Y_FEET",
+                        help="a mid-building cross-aisle position, in the same y feet as "
+                             "locations.csv (repeatable). Front and back are always included "
+                             "automatically; only pass the extra one(s) your building has.")
     args = parser.parse_args()
 
     for path in (args.locations, args.orders):
@@ -513,7 +531,7 @@ def main() -> None:
 
     locations = read_locations(args.locations)
     orders = read_orders(args.orders)
-    warehouse = Warehouse(locations)
+    warehouse = Warehouse(locations, cross_aisles=args.cross_aisles)
 
     # Catch a bad join early: a pick line pointing at a slot the location master
     # does not contain is a data problem, not something to silently skip.

@@ -256,10 +256,17 @@ function readOrders(text, filename) {
 // The warehouse and its distance model — mirrors class Warehouse.
 // ---------------------------------------------------------------------------
 
-function makeWarehouse(locations) {
+function makeWarehouse(locations, crossAisles) {
   const ys = Array.from(locations.values(), l => l.y);
   const frontY = Math.min(...ys);
   const backY = Math.max(...ys);
+
+  // Every declared cross-aisle a picker can change aisles at - mirrors
+  // Warehouse.__init__ in pick_path.py exactly, including always folding in
+  // front/back so a caller only has to name the extra mid-building one(s).
+  const declared = (crossAisles && crossAisles.length) ? crossAisles : [];
+  const crossSet = new Set(declared.concat([frontY, backY]));
+  const crossAisleList = Array.from(crossSet).sort((a, b) => a - b);
 
   let depotId;
   if (locations.has(DEPOT_LOCATION_ID)) {
@@ -276,9 +283,12 @@ function makeWarehouse(locations) {
     const a = locations.get(fromId), b = locations.get(toId);
     if (a.aisle === b.aisle) return Math.abs(a.y - b.y);
     const across = Math.abs(a.x - b.x);
-    const outFront = (a.y - frontY) + (b.y - frontY);
-    const outBack = (backY - a.y) + (backY - b.y);
-    return across + Math.min(outFront, outBack);
+    let via = Infinity;
+    for (const y of crossAisleList) {
+      const d = Math.abs(a.y - y) + Math.abs(b.y - y);
+      if (d < via) via = d;
+    }
+    return across + via;
   }
 
   function routeDistance(sequence) {
@@ -300,7 +310,7 @@ function makeWarehouse(locations) {
     return seen.size;
   }
 
-  return { locations, frontY, backY, depotId, distance, routeDistance, pickSlotCount, aisleCount };
+  return { locations, frontY, backY, crossAisles: crossAisleList, depotId, distance, routeDistance, pickSlotCount, aisleCount };
 }
 
 // ---------------------------------------------------------------------------
@@ -412,9 +422,13 @@ function optimizeOrder(wh, lines) {
 function travelWaypoints(wh, fromId, toId) {
   const a = wh.locations.get(fromId), b = wh.locations.get(toId);
   if (a.aisle === b.aisle) return [[a.x, a.y], [b.x, b.y]];
-  const outFront = (a.y - wh.frontY) + (b.y - wh.frontY);
-  const outBack = (wh.backY - a.y) + (wh.backY - b.y);
-  const crossY = outFront <= outBack ? wh.frontY : wh.backY;
+  // Whichever declared cross-aisle is shortest - same choice distance() makes,
+  // so the drawn line is always exactly as long as the reported number.
+  let crossY = wh.crossAisles[0], best = Infinity;
+  for (const y of wh.crossAisles) {
+    const d = Math.abs(a.y - y) + Math.abs(b.y - y);
+    if (d < best) { best = d; crossY = y; }
+  }
   return [[a.x, a.y], [a.x, crossY], [b.x, crossY], [b.x, b.y]];
 }
 
@@ -439,10 +453,10 @@ class JoinError extends Error {
   }
 }
 
-function runPickPath(locationsText, locationsName, ordersText, ordersName) {
+function runPickPath(locationsText, locationsName, ordersText, ordersName, crossAisles) {
   const locations = readLocations(locationsText, locationsName);
   const orders = readOrders(ordersText, ordersName);
-  const wh = makeWarehouse(locations);
+  const wh = makeWarehouse(locations, crossAisles);
 
   const missing = new Set();
   for (const lines of orders.values()) {
@@ -503,15 +517,25 @@ function buildFloorPlan(wh) {
 }
 
 function rackBlocks(plan) {
+  // One segment per (aisle-gap, cross-aisle-gap) pair - mirrors rack_blocks()
+  // in make_dashboard.py exactly, including the near_edge/far_edge return
+  // shape, so a mid-building cross-over leaves a real gap in the racking.
   const columns = plan.aisleColumns().map(([, x]) => x);
   if (columns.length < 2) return [];
   const gaps = [];
   for (let i = 0; i < columns.length - 1; i++) gaps.push(columns[i + 1] - columns[i]);
   const corridor = Math.min(...gaps) * CORRIDOR_FRACTION;
+  const inset = (plan.maxY - plan.minY) * 0.03;
+  const cross = plan.warehouse.crossAisles.slice().sort((a, b) => a - b);
+
   const blocks = [];
   for (let i = 0; i < columns.length - 1; i++) {
     const left = columns[i] + corridor, right = columns[i + 1] - corridor;
-    if (right > left) blocks.push([left, right]);
+    if (right <= left) continue;
+    for (let j = 0; j < cross.length - 1; j++) {
+      const nearEdge = cross[j] + inset, farEdge = cross[j + 1] - inset;
+      if (farEdge > nearEdge) blocks.push([left, right, nearEdge, farEdge]);
+    }
   }
   return blocks;
 }
@@ -520,21 +544,26 @@ function svgFloor(plan) {
   const wh = plan.warehouse;
   const parts = [];
   const depth = plan.maxY - plan.minY;
-  const inset = depth * 0.03;
 
   const band = Math.max(plan.scale * (depth * 0.045), 9.0);
-  for (const [label, yAt] of [["FRONT CROSS-AISLE", plan.minY], ["BACK CROSS-AISLE", plan.maxY]]) {
+  const cross = wh.crossAisles.slice().sort((a, b) => a - b);
+  cross.forEach((yAt, idx) => {
+    let label;
+    if (cross.length === 1) label = "CROSS-AISLE";
+    else if (idx === 0) label = "FRONT CROSS-AISLE";
+    else if (idx === cross.length - 1) label = "BACK CROSS-AISLE";
+    else label = "CROSS-AISLE";
     const cy = plan.sy(yAt);
     parts.push(`<rect class="crossaisle" x="${plan.sx(plan.minX).toFixed(1)}" y="${(cy - band / 2).toFixed(1)}" ` +
       `width="${((plan.maxX - plan.minX) * plan.scale).toFixed(1)}" height="${band.toFixed(1)}" rx="2"/>`);
     parts.push(`<text class="bandlabel" x="${plan.sx(plan.maxX).toFixed(1)}" ` +
       `y="${(cy - band / 2 - 5).toFixed(1)}" text-anchor="end">${label}</text>`);
-  }
+  });
 
-  const top = plan.sy(plan.maxY - inset), bottom = plan.sy(plan.minY + inset);
-  for (const [left, right] of rackBlocks(plan)) {
-    parts.push(`<rect class="rack" x="${plan.sx(left).toFixed(1)}" y="${top.toFixed(1)}" ` +
-      `width="${((right - left) * plan.scale).toFixed(1)}" height="${(bottom - top).toFixed(1)}" rx="2"/>`);
+  for (const [left, right, nearEdge, farEdge] of rackBlocks(plan)) {
+    const svgTop = plan.sy(farEdge), svgBottom = plan.sy(nearEdge);
+    parts.push(`<rect class="rack" x="${plan.sx(left).toFixed(1)}" y="${svgTop.toFixed(1)}" ` +
+      `width="${((right - left) * plan.scale).toFixed(1)}" height="${(svgBottom - svgTop).toFixed(1)}" rx="2"/>`);
   }
 
   for (const [aisle, x] of plan.aisleColumns()) {

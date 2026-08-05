@@ -234,5 +234,38 @@ try {
     driftCount === 0 && derived.length === 200, `${driftCount} slot(s) drifted`);
 }
 
+// --------------------------------------------------------------------------
+// 8. Mid-building cross-aisle - a wide tunnel that splits the racking, not
+//    representable at all before this was added. Two claims, checked
+//    computationally rather than assumed: it shortens a route for a pair
+//    near the middle, and it never makes anything worse.
+// --------------------------------------------------------------------------
+
+{
+  const whDefault = engine.makeWarehouse(wh.locations);
+  const whMid = engine.makeWarehouse(wh.locations, [45]);
+
+  check("cross-aisle list defaults to just [front, back]",
+    JSON.stringify(whDefault.crossAisles) === "[0,90]", JSON.stringify(whDefault.crossAisles));
+  check("adding a mid cross-aisle keeps front/back and inserts the new one",
+    JSON.stringify(whMid.crossAisles) === "[0,45,90]", JSON.stringify(whMid.crossAisles));
+
+  const nearMiddleDefault = whDefault.distance("A01-B05-L1", "A02-B05-L1");
+  const nearMiddleMid = whMid.distance("A01-B05-L1", "A02-B05-L1");
+  check("a mid cross-aisle shortens a route for a pair near the middle (92ft -> 22ft)",
+    nearMiddleDefault === 92 && nearMiddleMid === 22, `${nearMiddleDefault} -> ${nearMiddleMid}`);
+
+  const nearFrontDefault = whDefault.distance("A01-B01-L1", "A02-B01-L1");
+  const nearFrontMid = whMid.distance("A01-B01-L1", "A02-B01-L1");
+  check("a mid cross-aisle does not disturb a pair for which front is still shorter",
+    nearFrontDefault === nearFrontMid, `${nearFrontDefault} vs ${nearFrontMid}`);
+
+  const totalDefault = defaultResults => defaultResults.reduce((s, r) => s + r.optimized_distance, 0);
+  const midResults = Array.from(orders.keys()).sort(engine.codePointCompare)
+    .map(id => engine.optimizeOrder(whMid, orders.get(id)));
+  check("adding a mid cross-aisle never increases total optimized distance",
+    totalDefault(midResults) <= totalDefault(results));
+}
+
 console.log(`\n${pass} passed, ${fail} failed`);
 process.exit(fail ? 1 : 0);

@@ -139,6 +139,45 @@ td.seq{font-family:var(--mono);font-size:11px;color:var(--ink-faint);
 .dimsCaveat{font-size:11.5px;color:var(--ink-faint);margin:12px 0 0;line-height:1.55;
   border-top:1px solid #DCEBEA;padding-top:10px}
 .dimsCaveat code{font-family:var(--mono);background:var(--panel);padding:1px 4px;border-radius:3px}
+
+.crossList{margin-top:14px;padding-top:12px;border-top:1px solid #DCEBEA}
+.crossListLabel{font-size:11.5px;color:var(--ink-dim);display:block;margin-bottom:8px;line-height:1.5}
+.crossRow{display:flex;gap:8px;align-items:center;margin-bottom:6px}
+.crossRow input{font-family:var(--mono);font-size:12.5px;padding:5px 8px;width:100px;
+  border:1px solid var(--line);border-radius:4px;background:var(--panel);color:var(--ink)}
+.crossRow input:focus{outline:none;border-color:var(--now)}
+.crossRow .unit{font-size:11.5px;color:var(--ink-faint)}
+.crossRow .removeCross{border:none;background:none;color:var(--ink-faint);cursor:pointer;
+  font-size:16px;line-height:1;padding:2px 6px}
+.crossRow .removeCross:hover{color:var(--alert)}
+.addCrossBtn{font-family:var(--sans);font-size:12px;color:var(--now);background:none;
+  border:1px dashed var(--now);border-radius:4px;padding:5px 10px;cursor:pointer}
+.addCrossBtn:hover{background:#F2F8F8}
+
+.warehouseBuilder{margin-top:16px}
+.wbGrid{display:grid;grid-template-columns:repeat(2,1fr);gap:14px;margin:14px 0}
+.wbGrid label{font-size:11.5px;color:var(--ink-dim);display:flex;flex-direction:column;gap:4px}
+.wbGrid input{font-family:var(--mono);font-size:13px;padding:6px 9px;
+  border:1px solid var(--line);border-radius:4px;background:var(--panel);color:var(--ink)}
+.wbGrid input:focus{outline:none;border-color:var(--now)}
+.wbActions{display:flex;gap:10px;margin-top:14px;flex-wrap:wrap}
+.wbActions button{font-family:var(--sans);font-size:12.5px;font-weight:600;padding:7px 14px;
+  border-radius:4px;cursor:pointer}
+.wbActions .primary{border:1px solid var(--now);background:var(--now);color:#fff}
+.wbActions .primary:hover{opacity:.9}
+.wbActions .secondary{border:1px solid var(--line);background:var(--panel);color:var(--ink)}
+.wbActions .secondary:disabled{color:var(--ink-faint);cursor:not-allowed}
+.wbActions .secondary:not(:disabled):hover{border-color:var(--now);color:var(--now)}
+.wbPreviewWrap{margin-top:16px;border-top:1px solid var(--line-soft);padding-top:14px}
+.wbPreviewWrap svg{display:block;width:100%;height:auto;background:var(--ground);
+  border:1px solid var(--line);border-radius:4px}
+.wbPreviewWrap svg .rack{fill:var(--rack);stroke:var(--rack-line);stroke-width:1}
+.wbPreviewWrap svg .crossaisle{fill:#F2EFEA;stroke:none}
+.wbPreviewWrap svg .bandlabel{font-family:var(--mono);font-size:8.5px;fill:var(--ink-faint);letter-spacing:.08em}
+.wbPreviewWrap svg .aislelabel{font-family:var(--mono);font-size:10px;fill:var(--ink-faint)}
+.wbPreviewWrap svg .depot{fill:var(--ink);stroke:none}
+.wbPreviewWrap svg .depotlabel{font-family:var(--mono);font-size:9px;fill:var(--ink-dim);letter-spacing:.05em}
+.wbCaption{font-size:11.5px;color:var(--ink-faint);margin-top:8px;line-height:1.5}
 footer{margin-top:26px;border-top:1px solid var(--line);padding-top:16px;
   font-size:12px;color:var(--ink-dim);max-width:760px}
 footer h3{font-size:12px;margin:0 0 6px;color:var(--ink)}
@@ -153,7 +192,7 @@ footer li{margin-bottom:3px}
   <p class="src"><span class="tag" id="tag">Synthetic sample data</span>
   <span id="srcline">locations.csv · 200 slots ·
   orders.csv · 20 orders · 325 lines ·
-  generated 05 Aug 2026, 16:58</span></p>
+  generated 05 Aug 2026, 17:16</span></p>
 </header>
 
 <div class="stats">
@@ -175,7 +214,7 @@ close to the shortest route.</p>
 
 <div class="panel upload">
   <div class="phead">
-    <h2>Try it on your own data</h2>
+    <h2>1. Optimize your pick orders</h2>
     <span class="note">free · runs in your browser · nothing is uploaded anywhere</span>
   </div>
   <div class="uploadbody">
@@ -203,15 +242,67 @@ close to the shortest route.</p>
         </label>
         <button type="button" id="buildDimsBtn" onclick="buildFromDimensions()">Build floor plan</button>
       </div>
+      <div class="crossList">
+        <span class="crossListLabel">Mid-building cross-aisles (optional) - a wide tunnel that lets a
+          truck change aisles without going all the way to the front or back. Front and back are
+          always included automatically; only add the extra one(s) your building has.</span>
+        <div id="crossListRows_dims"></div>
+        <button type="button" class="addCrossBtn" onclick="addCrossAisleRow('crossListRows_dims')">+ Add cross-aisle</button>
+      </div>
       <p class="dimsCaveat">This assumes uniform spacing and aisle numbers running left to right, the
-        same as pacing off one aisle and multiplying. If your building has uneven aisle widths,
-        one-way aisles, multiple docks, or zones, this estimate will be wrong in ways that matter -
-        use <code>CLIENT_PROMPT.md</code> with Claude Code for those. Paced out a real aisle and got a
+        same as pacing off one aisle and multiplying. If your building has uneven aisle widths or
+        one-way aisles, this estimate will be wrong in ways that matter - use
+        <code>CLIENT_PROMPT.md</code> with Claude Code for those. Paced out a real aisle and got a
         different number? Change it above and build again - the map updates instantly.</p>
     </div>
   </div>
   <div class="caption">Currently showing: <b id="datasource">the synthetic sample data</b>.
     <a href="#" id="resetlink" onclick="resetToSample(event)" hidden>Reset to sample data</a></div>
+</div>
+
+<div class="panel upload warehouseBuilder">
+  <div class="phead">
+    <h2>2. Describe your warehouse</h2>
+    <span class="note">free · runs in your browser · nothing is uploaded anywhere</span>
+  </div>
+  <div class="uploadbody">
+    <p class="dimsNote">Every warehouse is laid out differently. Build a floor plan here from
+      scratch - aisle count, spacing, and any mid-building cross-aisles - see it drawn
+      immediately, and download a <code>locations.csv</code> you can drop into Section 1 above.
+      This uses generic slot labels (A01-B01, and so on); if you already have a locations file
+      with your own labels, use the "build floor plan" recovery in Section 1 instead - this tool
+      is for previewing a layout, not relabelling one you already have.</p>
+    <div class="wbGrid">
+      <label>Number of aisles
+        <input type="number" id="wbAisleCount" min="1" step="1" placeholder="e.g. 10">
+      </label>
+      <label>Distance between aisle centers (ft)
+        <input type="number" id="wbAisleSpacing" min="0.1" step="0.1" placeholder="e.g. 12">
+      </label>
+      <label>Bays per aisle
+        <input type="number" id="wbBayCount" min="1" step="1" placeholder="e.g. 10">
+      </label>
+      <label>Distance between bay centers (ft)
+        <input type="number" id="wbBayPitch" min="0.1" step="0.1" placeholder="e.g. 10">
+      </label>
+    </div>
+    <div class="crossList">
+      <span class="crossListLabel">Mid-building cross-aisles (optional) - feet from the front,
+        where racking is split by a tunnel wide enough to change aisles in. Front and back are
+        always included automatically.</span>
+      <div id="crossListRows_wb"></div>
+      <button type="button" class="addCrossBtn" onclick="addCrossAisleRow('crossListRows_wb')">+ Add cross-aisle</button>
+    </div>
+    <div class="wbActions">
+      <button type="button" class="primary" onclick="previewWarehouseShape()">Preview floor plan</button>
+      <button type="button" class="secondary" id="wbDownloadBtn" onclick="downloadWarehouseCsv()" disabled>Download locations.csv</button>
+    </div>
+    <div class="errorbox" id="wbErrorbox" hidden></div>
+    <div class="wbPreviewWrap" id="wbPreviewWrap" hidden>
+      <svg id="wbPreviewSvg" viewBox="0 0 100 100" role="img" aria-label="Preview of the warehouse shape described above"></svg>
+      <p class="wbCaption" id="wbCaption"></p>
+    </div>
+  </div>
 </div>
 
 <div class="stack">
@@ -565,10 +656,17 @@ function readOrders(text, filename) {
 // The warehouse and its distance model — mirrors class Warehouse.
 // ---------------------------------------------------------------------------
 
-function makeWarehouse(locations) {
+function makeWarehouse(locations, crossAisles) {
   const ys = Array.from(locations.values(), l => l.y);
   const frontY = Math.min(...ys);
   const backY = Math.max(...ys);
+
+  // Every declared cross-aisle a picker can change aisles at - mirrors
+  // Warehouse.__init__ in pick_path.py exactly, including always folding in
+  // front/back so a caller only has to name the extra mid-building one(s).
+  const declared = (crossAisles && crossAisles.length) ? crossAisles : [];
+  const crossSet = new Set(declared.concat([frontY, backY]));
+  const crossAisleList = Array.from(crossSet).sort((a, b) => a - b);
 
   let depotId;
   if (locations.has(DEPOT_LOCATION_ID)) {
@@ -585,9 +683,12 @@ function makeWarehouse(locations) {
     const a = locations.get(fromId), b = locations.get(toId);
     if (a.aisle === b.aisle) return Math.abs(a.y - b.y);
     const across = Math.abs(a.x - b.x);
-    const outFront = (a.y - frontY) + (b.y - frontY);
-    const outBack = (backY - a.y) + (backY - b.y);
-    return across + Math.min(outFront, outBack);
+    let via = Infinity;
+    for (const y of crossAisleList) {
+      const d = Math.abs(a.y - y) + Math.abs(b.y - y);
+      if (d < via) via = d;
+    }
+    return across + via;
   }
 
   function routeDistance(sequence) {
@@ -609,7 +710,7 @@ function makeWarehouse(locations) {
     return seen.size;
   }
 
-  return { locations, frontY, backY, depotId, distance, routeDistance, pickSlotCount, aisleCount };
+  return { locations, frontY, backY, crossAisles: crossAisleList, depotId, distance, routeDistance, pickSlotCount, aisleCount };
 }
 
 // ---------------------------------------------------------------------------
@@ -721,9 +822,13 @@ function optimizeOrder(wh, lines) {
 function travelWaypoints(wh, fromId, toId) {
   const a = wh.locations.get(fromId), b = wh.locations.get(toId);
   if (a.aisle === b.aisle) return [[a.x, a.y], [b.x, b.y]];
-  const outFront = (a.y - wh.frontY) + (b.y - wh.frontY);
-  const outBack = (wh.backY - a.y) + (wh.backY - b.y);
-  const crossY = outFront <= outBack ? wh.frontY : wh.backY;
+  // Whichever declared cross-aisle is shortest - same choice distance() makes,
+  // so the drawn line is always exactly as long as the reported number.
+  let crossY = wh.crossAisles[0], best = Infinity;
+  for (const y of wh.crossAisles) {
+    const d = Math.abs(a.y - y) + Math.abs(b.y - y);
+    if (d < best) { best = d; crossY = y; }
+  }
   return [[a.x, a.y], [a.x, crossY], [b.x, crossY], [b.x, b.y]];
 }
 
@@ -748,10 +853,10 @@ class JoinError extends Error {
   }
 }
 
-function runPickPath(locationsText, locationsName, ordersText, ordersName) {
+function runPickPath(locationsText, locationsName, ordersText, ordersName, crossAisles) {
   const locations = readLocations(locationsText, locationsName);
   const orders = readOrders(ordersText, ordersName);
-  const wh = makeWarehouse(locations);
+  const wh = makeWarehouse(locations, crossAisles);
 
   const missing = new Set();
   for (const lines of orders.values()) {
@@ -812,15 +917,25 @@ function buildFloorPlan(wh) {
 }
 
 function rackBlocks(plan) {
+  // One segment per (aisle-gap, cross-aisle-gap) pair - mirrors rack_blocks()
+  // in make_dashboard.py exactly, including the near_edge/far_edge return
+  // shape, so a mid-building cross-over leaves a real gap in the racking.
   const columns = plan.aisleColumns().map(([, x]) => x);
   if (columns.length < 2) return [];
   const gaps = [];
   for (let i = 0; i < columns.length - 1; i++) gaps.push(columns[i + 1] - columns[i]);
   const corridor = Math.min(...gaps) * CORRIDOR_FRACTION;
+  const inset = (plan.maxY - plan.minY) * 0.03;
+  const cross = plan.warehouse.crossAisles.slice().sort((a, b) => a - b);
+
   const blocks = [];
   for (let i = 0; i < columns.length - 1; i++) {
     const left = columns[i] + corridor, right = columns[i + 1] - corridor;
-    if (right > left) blocks.push([left, right]);
+    if (right <= left) continue;
+    for (let j = 0; j < cross.length - 1; j++) {
+      const nearEdge = cross[j] + inset, farEdge = cross[j + 1] - inset;
+      if (farEdge > nearEdge) blocks.push([left, right, nearEdge, farEdge]);
+    }
   }
   return blocks;
 }
@@ -829,21 +944,26 @@ function svgFloor(plan) {
   const wh = plan.warehouse;
   const parts = [];
   const depth = plan.maxY - plan.minY;
-  const inset = depth * 0.03;
 
   const band = Math.max(plan.scale * (depth * 0.045), 9.0);
-  for (const [label, yAt] of [["FRONT CROSS-AISLE", plan.minY], ["BACK CROSS-AISLE", plan.maxY]]) {
+  const cross = wh.crossAisles.slice().sort((a, b) => a - b);
+  cross.forEach((yAt, idx) => {
+    let label;
+    if (cross.length === 1) label = "CROSS-AISLE";
+    else if (idx === 0) label = "FRONT CROSS-AISLE";
+    else if (idx === cross.length - 1) label = "BACK CROSS-AISLE";
+    else label = "CROSS-AISLE";
     const cy = plan.sy(yAt);
     parts.push(`<rect class="crossaisle" x="${plan.sx(plan.minX).toFixed(1)}" y="${(cy - band / 2).toFixed(1)}" ` +
       `width="${((plan.maxX - plan.minX) * plan.scale).toFixed(1)}" height="${band.toFixed(1)}" rx="2"/>`);
     parts.push(`<text class="bandlabel" x="${plan.sx(plan.maxX).toFixed(1)}" ` +
       `y="${(cy - band / 2 - 5).toFixed(1)}" text-anchor="end">${label}</text>`);
-  }
+  });
 
-  const top = plan.sy(plan.maxY - inset), bottom = plan.sy(plan.minY + inset);
-  for (const [left, right] of rackBlocks(plan)) {
-    parts.push(`<rect class="rack" x="${plan.sx(left).toFixed(1)}" y="${top.toFixed(1)}" ` +
-      `width="${((right - left) * plan.scale).toFixed(1)}" height="${(bottom - top).toFixed(1)}" rx="2"/>`);
+  for (const [left, right, nearEdge, farEdge] of rackBlocks(plan)) {
+    const svgTop = plan.sy(farEdge), svgBottom = plan.sy(nearEdge);
+    parts.push(`<rect class="rack" x="${plan.sx(left).toFixed(1)}" y="${svgTop.toFixed(1)}" ` +
+      `width="${((right - left) * plan.scale).toFixed(1)}" height="${(svgBottom - svgTop).toFixed(1)}" rx="2"/>`);
   }
 
   for (const [aisle, x] of plan.aisleColumns()) {
@@ -1210,12 +1330,13 @@ function buildFromDimensions(){
   catch (e) { showError('locations', { error: e }); return; }
 
   var locations = locationsMapFrom(deriveXY(coreRows, spacing, pitch));
+  var crossAisles = getCrossAisleValues('crossListRows_dims');
 
   var orders;
   try { orders = readOrders(pending.orders.text, pending.orders.name); }
   catch (e) { showError('orders', { error: e }); return; }
 
-  var wh = makeWarehouse(locations);
+  var wh = makeWarehouse(locations, crossAisles);
   var missing = new Set();
   orders.forEach(function(lines){
     lines.forEach(function(line){ if (!locations.has(line.location_id)) { missing.add(line.location_id); } });
@@ -1230,9 +1351,127 @@ function buildFromDimensions(){
 
   hideError();
   renderResults(wh, orders, results, 'Your data - estimated', pending.locations.name, pending.orders.name);
+  var crossNote = crossAisles.length ? ', ' + crossAisles.length + ' mid cross-aisle' + (crossAisles.length > 1 ? 's' : '') : '';
   document.getElementById('datasource').textContent = pending.locations.name + ' + ' + pending.orders.name +
-    ' (coordinates estimated: ' + spacing + ' ft aisles, ' + pitch + ' ft bays)';
+    ' (coordinates estimated: ' + spacing + ' ft aisles, ' + pitch + ' ft bays' + crossNote + ')';
   document.getElementById('resetlink').hidden = false;
+}
+
+// ---------------------------------------------------------------------------
+// Shared cross-aisle list control - used by both Section 1's recovery panel
+// and Section 2's warehouse builder below. A row is just a labelled number
+// input plus a remove button; getCrossAisleValues() reads whatever is
+// currently in a given container, skipping blanks, so an empty or half-filled
+// list never throws - it just contributes nothing extra beyond front/back.
+// ---------------------------------------------------------------------------
+
+function addCrossAisleRow(containerId){
+  var container = document.getElementById(containerId);
+  var row = document.createElement('div');
+  row.className = 'crossRow';
+  row.innerHTML = '<input type="number" step="0.1" placeholder="e.g. 45" aria-label="Cross-aisle position in feet from the front">' +
+    '<span class="unit">ft from the front</span>' +
+    '<button type="button" class="removeCross" aria-label="Remove this cross-aisle" onclick="this.parentElement.remove()">&times;</button>';
+  container.appendChild(row);
+  row.querySelector('input').focus();
+}
+
+function getCrossAisleValues(containerId){
+  var inputs = document.querySelectorAll('#' + containerId + ' input');
+  var values = [];
+  inputs.forEach(function(input){
+    var v = parseFloat(input.value);
+    if (!isNaN(v)) { values.push(v); }
+  });
+  return values;
+}
+
+// ---------------------------------------------------------------------------
+// Section 2 - describe a warehouse from scratch, no file needed. Builds
+// generic location rows (A01-B01, ...) through the same deriveXY() the
+// upload recovery path uses, so the math is identical either way - only
+// where the aisle/bay labels come from differs.
+// ---------------------------------------------------------------------------
+
+var lastBuiltWarehouse = null;   // {locations, aisleSpacing, bayPitch} - set by previewWarehouseShape(), read by downloadWarehouseCsv()
+
+function buildManualRows(aisleCount, bayCount){
+  var rows = [];
+  for (var a = 1; a <= aisleCount; a++){
+    for (var b = 1; b <= bayCount; b++){
+      rows.push({
+        location_id: 'A' + String(a).padStart(2, '0') + '-B' + String(b).padStart(2, '0'),
+        aisle: a, bay: b, level: 1,
+      });
+    }
+  }
+  return rows;
+}
+
+function hideWbError(){ document.getElementById('wbErrorbox').hidden = true; }
+function showWbError(message){
+  var box = document.getElementById('wbErrorbox');
+  box.innerHTML = '<b>' + escapeHtml(message) + '</b>';
+  box.hidden = false;
+}
+
+function previewWarehouseShape(){
+  hideWbError();
+  var aisleCount = parseInt(document.getElementById('wbAisleCount').value, 10);
+  var aisleSpacing = parseFloat(document.getElementById('wbAisleSpacing').value);
+  var bayCount = parseInt(document.getElementById('wbBayCount').value, 10);
+  var bayPitch = parseFloat(document.getElementById('wbBayPitch').value);
+
+  if (!(aisleCount > 0) || !(bayCount > 0) || !(aisleSpacing > 0) || !(bayPitch > 0)){
+    showWbError('Enter a positive number for all four fields - aisle count, aisle spacing, bays per aisle, and bay pitch.');
+    document.getElementById('wbPreviewWrap').hidden = true;
+    document.getElementById('wbDownloadBtn').disabled = true;
+    return;
+  }
+
+  var rows = buildManualRows(aisleCount, bayCount);
+  var derived = deriveXY(rows, aisleSpacing, bayPitch);
+  // A depot at the front-left corner, one aisle-width out - matches where
+  // the sample data's own STAGING sits, so the preview does not default to
+  // a bare rack corner with nowhere obvious to start.
+  derived.push({ location_id: 'STAGING', aisle: 0, bay: 0, level: 0, x: -aisleSpacing, y: 0 });
+
+  var locations = locationsMapFrom(derived);
+  var crossAisles = getCrossAisleValues('crossListRows_wb');
+  var wh = makeWarehouse(locations, crossAisles);
+  var plan = buildFloorPlan(wh);
+
+  var svg = document.getElementById('wbPreviewSvg');
+  svg.setAttribute('viewBox', '0 0 ' + Math.round(plan.width) + ' ' + Math.round(plan.height));
+  svg.innerHTML = svgFloor(plan);
+  document.getElementById('wbPreviewWrap').hidden = false;
+
+  var crossNote = crossAisles.length
+    ? crossAisles.length + ' mid cross-aisle' + (crossAisles.length > 1 ? 's' : '') + ' plus front and back'
+    : 'front and back only';
+  document.getElementById('wbCaption').textContent =
+    aisleCount + ' aisles at ' + aisleSpacing + ' ft, ' + bayCount + ' bays at ' + bayPitch + ' ft, ' +
+    crossNote + '. Does this look like your warehouse? If not, adjust the numbers above and preview again.';
+
+  lastBuiltWarehouse = { locations: locations, aisleSpacing: aisleSpacing, bayPitch: bayPitch };
+  document.getElementById('wbDownloadBtn').disabled = false;
+}
+
+function downloadWarehouseCsv(){
+  if (!lastBuiltWarehouse){ return; }
+  var rows = ['location_id,aisle,bay,level,x,y'];
+  lastBuiltWarehouse.locations.forEach(function(loc){
+    rows.push([loc.location_id, loc.aisle, loc.bay, loc.level, loc.x, loc.y].join(','));
+  });
+  var blob = new Blob([rows.join('\n') + '\n'], { type: 'text/csv' });
+  var url = URL.createObjectURL(blob);
+  var a = document.createElement('a');
+  a.href = url;
+  a.download = 'locations.csv';
+  document.body.appendChild(a);
+  a.click();
+  document.body.removeChild(a);
+  URL.revokeObjectURL(url);
 }
 
 function handleFiles(fileList){
@@ -1264,6 +1503,7 @@ function resetToSample(e){
   hideDimsPanel();
   document.getElementById('aisleSpacingInput').value = '';
   document.getElementById('bayPitchInput').value = '';
+  document.getElementById('crossListRows_dims').innerHTML = '';
 
   var locations = readLocations(SAMPLE.locations, 'locations.csv');
   var orders = readOrders(SAMPLE.orders, 'orders.csv');

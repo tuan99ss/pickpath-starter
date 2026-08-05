@@ -299,10 +299,36 @@ instantly, which makes this a fast way to sanity-check a guess, not just a one-s
 Aisle labels like `A01` are handled automatically — `aisle` and `bay` only need a number
 in them somewhere, not a bare integer.
 
-**This does not replace the interview below.** If your building has uneven aisle
-spacing, one-way aisles, zones, multiple docks, or aisle numbers that do not run in
-physical order, two numbers cannot capture that, and the box will not even offer to try
-— your column names would not all match. That is exactly what `CLIENT_PROMPT.md` is for.
+**A wide tunnel splitting the racking down the middle — the "Mid-building cross-aisles"
+control right below the two numbers.** A lot of bigger buildings are not just front and
+back: there is a second crossing partway through, wide enough for a truck to change
+aisles without walking to either end. Add its distance from the front in feet, and every
+route near it is measured through the middle instead of forced out to an end it does not
+need. The floor map draws it as a real gap in the racking, not a line pretending it is
+not there.
+
+**This still does not replace the interview below** for anything more irregular. If your
+building has uneven aisle spacing, one-way aisles, zones, multiple docks, or aisle
+numbers that do not run in physical order, this box will not even offer itself — your
+column names would not all match. That is exactly what `CLIENT_PROMPT.md` is for.
+
+---
+
+## Describing a warehouse you do not have a file for yet
+
+**Section 2 of the dashboard, "Describe your warehouse,"** builds a floor plan from
+scratch — no CSV needed at all. Type an aisle count, aisle spacing, bays per aisle, bay
+pitch, and any mid-building cross-aisles, click **Preview floor plan**, and it draws
+immediately so you can check it against what you actually have on the floor.
+
+Click **Download locations.csv** and you get a real file — generic slot labels
+(`A01-B01`, and so on) with the coordinates computed — that you can drop straight into
+Section 1 alongside a real orders file, open with `pick_path.py`, or hand to Claude Code
+as a starting point if the shape needs to get more irregular than this box can describe.
+
+This is for previewing and sanity-checking a layout, not for relabelling one you already
+have — if your locations file already has real slot labels and is just missing
+coordinates, use Section 1's recovery panel instead of retyping everything here.
 
 ---
 
