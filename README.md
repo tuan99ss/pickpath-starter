@@ -281,6 +281,31 @@ this package is for.
 
 ---
 
+## If your file has aisle/bay labels but no x/y
+
+This is the normal case — a WMS tracks slot labels, not physical positions. If your
+locations file already has `location_id`, `aisle`, `bay` and `level` columns by those
+names and is just missing `x`/`y`, the upload box in `dashboard.html` notices and offers
+to build a floor plan from two numbers: the distance between aisle centers, and the
+distance between bay centers, both in feet.
+
+This works when your aisles are evenly spaced and numbered in physical left-to-right
+order — the same assumption as pacing off one aisle and multiplying. Type the two
+numbers, click **Build floor plan**, and the map and every distance are computed from
+them, live, right there — no Claude, no adapter, no re-upload. Paced out a real aisle and
+the number does not match? Change the spacing and click again; the whole page updates
+instantly, which makes this a fast way to sanity-check a guess, not just a one-shot.
+
+Aisle labels like `A01` are handled automatically — `aisle` and `bay` only need a number
+in them somewhere, not a bare integer.
+
+**This does not replace the interview below.** If your building has uneven aisle
+spacing, one-way aisles, zones, multiple docks, or aisle numbers that do not run in
+physical order, two numbers cannot capture that, and the box will not even offer to try
+— your column names would not all match. That is exactly what `CLIENT_PROMPT.md` is for.
+
+---
+
 ## Adapting this to your warehouse
 
 The sample warehouse is a clean grid. Yours is not. Real buildings have uneven aisle
@@ -296,7 +321,9 @@ if your team uses it) to do that adaptation with you. It instructs the assistant
    optimizer logic alone.
 3. Interview you about your actual layout — aisle spacing, one-way aisles, zones,
    staging points, anything that changes how a truck can travel — and adjust the
-   model to match.
+   model to match. **If you have a site plan, CAD export, or a photo of a whiteboard
+   sketch, it can read that directly** instead of you describing the building in
+   words — attach it and say so.
 4. Keep every file on your machine.
 5. Finish by validating the result against a week of real historical orders, and
    sanity-checking the distance model against one run you can measure yourself.
@@ -338,8 +365,12 @@ The sample data is generated, not taken from anyone's warehouse.
   it with Claude Code or claude.ai to build an adapter, then drop what it produces in here.
 - **"Doesn't have the columns this expects", with a Missing: list** — one file was close
   enough to identify (it has `location_id`, or it has `order_id`/`sku`/`qty`) but is
-  missing specific columns, named exactly. `x`/`y` missing is the most common case — see
-  the note in that message about why coordinates almost never survive a WMS export as-is.
+  missing specific columns, named exactly. If the only thing missing is `x`/`y` and
+  `location_id`/`aisle`/`bay`/`level` are all present, you get the **"Build floor plan"**
+  box instead — see [If your file has aisle/bay labels but no x/y](#if-your-file-has-aislebay-labels-but-no-xy) above.
+- **"Enter a positive number of feet for both"** — the floor-plan box needs both numbers
+  before it will build anything; a blank or zero/negative value stops there rather than
+  guessing.
 - **"Slot(s) picked but not in your location file"** — the two files do not agree on
   which slots exist. Check they came from the same export and cover the same locations.
 - **Nothing happens when you drop a file** — check it is a `.csv`; other file types are

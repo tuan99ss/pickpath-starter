@@ -121,6 +121,21 @@ function truncInt(raw, context) {
   return Math.trunc(requireFloat(orZero(raw), context));
 }
 
+// Aisle and bay are LABELS in most WMS exports ("A01", not "1"), not the pure
+// numbers pick_path.py's CLI expects. This is a tolerant superset used only
+// for those two fields: it extracts the digits and ignores any letters
+// around them, so "A01" and "AISLE-07" work exactly like "1" and "7" always
+// did. It never touches x/y - those are physical measurements, and a wrong
+// coordinate has to fail loudly, never be guessed at from a label.
+function parseLabelNumber(raw, context) {
+  var digits = String(raw == null ? "" : raw).match(/\d+/);
+  if (!digits) {
+    throw new Error(context + ": no number found in " + JSON.stringify(raw) +
+      " - aisle and bay labels need at least one digit (\"A01\" works, \"AA\" does not).");
+  }
+  return parseInt(digits[0], 10);
+}
+
 function codePointCompare(a, b) {
   // Python's default string comparison is by code point. localeCompare is
   // locale-sensitive and must never be used here - it can reorder order IDs.
@@ -143,8 +158,8 @@ function readLocations(text, filename) {
     const ctx = `${filename} line ${rowNo}`;
     locations.set(locId, {
       location_id: locId,
-      aisle: truncInt(row[field.aisle], ctx),
-      bay: truncInt(row[field.bay], ctx),
+      aisle: parseLabelNumber(row[field.aisle], ctx),
+      bay: parseLabelNumber(row[field.bay], ctx),
       level: truncInt(row[field.level], ctx),
       x: requireFloat(row[field.x], ctx),
       y: requireFloat(row[field.y], ctx),
@@ -153,6 +168,61 @@ function readLocations(text, filename) {
 
   if (locations.size === 0) throw new Error(`${filename} contained no usable rows.`);
   return locations;
+}
+
+// ---------------------------------------------------------------------------
+// Deriving coordinates when a WMS export has no x/y at all - the normal
+// case, since a WMS tracks slot labels, not physical positions. This is a
+// browser-only convenience layer: it never touches the distance model or the
+// route builder above, only how x/y get INTO a Location before either one
+// ever sees it. It covers exactly one case - an evenly spaced grid, aisles
+// numbered in physical left-to-right order - and says so loudly, because
+// anything more irregular (uneven spacing, one-way aisles, zones, multiple
+// docks) needs the real interview in CLIENT_PROMPT.md, not two numbers.
+// ---------------------------------------------------------------------------
+
+function readLocationsCoreOnly(text, filename) {
+  const { header, records } = parseCSV(text);
+  const field = columnLookup(header, ["location_id", "aisle", "bay", "level"]);
+  const rows = [];
+  records.forEach((row, idx) => {
+    const rowNo = idx + 2;
+    const locId = (row[field.location_id] || "").trim();
+    if (!locId) return;                              // blank padding row
+    const ctx = `${filename} line ${rowNo}`;
+    rows.push({
+      location_id: locId,
+      aisle: parseLabelNumber(row[field.aisle], ctx),
+      bay: parseLabelNumber(row[field.bay], ctx),
+      level: truncInt(row[field.level], ctx),
+    });
+  });
+  if (rows.length === 0) throw new Error(`${filename} contained no usable rows.`);
+  return rows;
+}
+
+function deriveXY(rows, aisleSpacingFt, bayPitchFt) {
+  // x: aisles sorted ascending become evenly spaced columns, left to right -
+  // using rank rather than the raw aisle number so a gap in numbering (1, 2,
+  // 3, 5) does not leave a phantom empty aisle's worth of floor space.
+  // y: bays run front-to-back at a fixed pitch, in the order they are
+  // numbered, starting at 0 for bay 1.
+  const aisleNumbers = Array.from(new Set(rows.map(r => r.aisle))).sort((a, b) => a - b);
+  const aisleIndex = new Map(aisleNumbers.map((n, i) => [n, i]));
+  return rows.map(r => ({
+    location_id: r.location_id,
+    aisle: r.aisle,
+    bay: r.bay,
+    level: r.level,
+    x: aisleIndex.get(r.aisle) * aisleSpacingFt,
+    y: (r.bay - 1) * bayPitchFt,
+  }));
+}
+
+function locationsMapFrom(rows) {
+  const map = new Map();
+  rows.forEach(r => map.set(r.location_id, r));
+  return map;
 }
 
 function readOrders(text, filename) {
@@ -538,6 +608,7 @@ if (typeof module !== "undefined") {
     serpentineSequence, nearestNeighbourSequence, twoOpt, optimizeOrder,
     travelWaypoints, routeWaypoints, runPickPath, codePointCompare,
     buildFloorPlan, rackBlocks, svgFloor, svgRoute, svgStops, buildRouteGroup,
-    buildTableRow, escapeHtml, fmtInt,
+    buildTableRow, escapeHtml, fmtInt, parseLabelNumber, readLocationsCoreOnly,
+    deriveXY, locationsMapFrom,
   };
 }

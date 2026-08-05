@@ -152,9 +152,26 @@ cross-aisles. My building probably breaks some of that. Work through this with m
 adjust the model to match what I tell you:
 
 - **Coordinates.** Does my export already have x/y positions for each slot, or only
-  aisle/bay/level labels? If only labels, we need to build coordinates: ask me the
-  centre-to-centre distance between aisles, the length of a bay, and whether aisle
-  numbering runs left to right across the building or some other way.
+  aisle/bay/level labels? Almost always the latter — a WMS tracks labels, not physical
+  positions.
+  - **If my aisles are evenly spaced and numbered in physical left-to-right order**, I do
+    not need you for this part: dashboard.html has a "Build floor plan" box that appears
+    automatically once my locations file has location_id/aisle/bay/level but no x/y. I
+    type the aisle spacing and bay pitch in feet, it derives the coordinates itself, and
+    I can change the numbers and rebuild instantly if a pace-out check disagrees. Tell me
+    this exists rather than doing it for me, if that is all my building needs — asking me
+    to describe a uniform grid to you when I could just build it myself is a wasted turn.
+  - **If I have an actual site plan, CAD export, or even a photo of a whiteboard
+    sketch**, ask me to attach it and READ it yourself rather than only asking me to
+    describe it in words — you can see a drawing directly. Pull out what you can: aisle
+    count, rough spacing, orientation, where staging/docks sit, any zones or irregular
+    areas. If the drawing has no scale or dimension marked, ask me for exactly ONE
+    physical measurement to calibrate against — the width of one aisle, or the length of
+    one wall — rather than guessing a scale from how the drawing looks.
+  - **If neither of those fits** — uneven spacing, aisles not in numeric left-right
+    order, a shape too irregular to describe as a grid — that is genuinely an interview,
+    and this is where it happens: ask me the centre-to-centre distance between aisles,
+    the length of a bay, and whatever else the drawing or my answers do not resolve.
 - **Aisle spacing.** Are all my aisles the same distance apart? Wide bulk aisles and
   narrow case-pick aisles change the cross-aisle math.
 - **Cross-aisles.** Are there mid-building cross-overs, or only at the ends? If there

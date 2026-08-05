@@ -177,10 +177,21 @@ try {
 }
 
 try {
-  engine.readLocations("location_id,aisle,bay,level,x,y\nA01-B01-L1,A01,1,1,0,0\n", "locations.csv");
-  check("a non-numeric aisle throws a clear error", false, "did not throw");
+  // "A01" is a label, not garbage - a real WMS export writes aisles this
+  // way, so this must resolve to aisle 1, not throw. This is the same
+  // tolerance readLocationsCoreOnly() uses for the "build my floor plan"
+  // recovery path below, applied everywhere aisle/bay is read.
+  const locs = engine.readLocations("location_id,aisle,bay,level,x,y\nA01-B01-L1,A01,1,1,0,0\n", "locations.csv");
+  check("an alphanumeric aisle label like 'A01' resolves to aisle 1", locs.get("A01-B01-L1").aisle === 1);
 } catch (e) {
-  check("a non-numeric aisle throws a clear error", e.message.includes("could not read a number"));
+  check("an alphanumeric aisle label like 'A01' resolves to aisle 1", false, e.message);
+}
+
+try {
+  engine.readLocations("location_id,aisle,bay,level,x,y\nA01-B01-L1,AA,1,1,0,0\n", "locations.csv");
+  check("an aisle label with no digits at all still throws a clear error", false, "did not throw");
+} catch (e) {
+  check("an aisle label with no digits at all still throws a clear error", e.message.includes("no number found"));
 }
 
 try {
@@ -199,6 +210,28 @@ try {
   check("mixed-case headers are read correctly", locs.size === 2);
 } catch (e) {
   check("mixed-case headers are read correctly", false, e.message);
+}
+
+// --------------------------------------------------------------------------
+// 7. deriveXY() - the "build my floor plan from two numbers" recovery path.
+//    Proven against the sample data's own REAL coordinates, not a hand-typed
+//    expectation: strip x/y from the sample, re-derive with the spacing the
+//    sample was actually built on (12ft aisles, 10ft bays), and every one of
+//    the 200 slots must land exactly where it started.
+// --------------------------------------------------------------------------
+
+{
+  const realLocations = engine.readLocations(locText, "locations.csv");
+  const coreRows = engine.readLocationsCoreOnly(locText, "locations.csv")
+    .filter(r => r.location_id !== "STAGING");         // hand-placed at the dock, not on the grid
+  const derived = engine.deriveXY(coreRows, 12, 10);
+  let driftCount = 0;
+  for (const d of derived) {
+    const real = realLocations.get(d.location_id);
+    if (Math.abs(real.x - d.x) > 1e-9 || Math.abs(real.y - d.y) > 1e-9) driftCount++;
+  }
+  check("deriveXY(spacing=12, pitch=10) exactly reproduces all 200 real sample coordinates",
+    driftCount === 0 && derived.length === 200, `${driftCount} slot(s) drifted`);
 }
 
 console.log(`\n${pass} passed, ${fail} failed`);

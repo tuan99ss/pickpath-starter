@@ -369,6 +369,21 @@ td.seq{font-family:var(--mono);font-size:11px;color:var(--ink-faint);
 .errorbox .fix{margin-top:9px;padding-top:9px;border-top:1px solid #E8D5D2}
 #resetlink{color:var(--now);text-decoration:none;margin-left:4px}
 #resetlink:hover{text-decoration:underline}
+
+.dimspanel{margin-top:12px;border:1px solid var(--now);background:#F2F8F8;border-radius:6px;padding:14px 16px}
+.dimsHead{font-weight:600;font-size:13px;color:var(--ink)}
+.dimsNote{font-size:12.5px;color:var(--ink-dim);margin:6px 0 12px;line-height:1.5}
+.dimsRow{display:flex;gap:14px;align-items:end;flex-wrap:wrap}
+.dimsRow label{font-size:11.5px;color:var(--ink-dim);display:flex;flex-direction:column;gap:4px}
+.dimsRow input{font-family:var(--mono);font-size:13px;padding:6px 9px;width:130px;
+  border:1px solid var(--line);border-radius:4px;background:var(--panel);color:var(--ink)}
+.dimsRow input:focus{outline:none;border-color:var(--now)}
+.dimsRow button{font-family:var(--sans);font-size:12.5px;font-weight:600;padding:7px 14px;
+  border:1px solid var(--now);border-radius:4px;background:var(--now);color:#fff;cursor:pointer}
+.dimsRow button:hover{opacity:.9}
+.dimsCaveat{font-size:11.5px;color:var(--ink-faint);margin:12px 0 0;line-height:1.55;
+  border-top:1px solid #DCEBEA;padding-top:10px}
+.dimsCaveat code{font-family:var(--mono);background:var(--panel);padding:1px 4px;border-radius:3px}
 footer{margin-top:26px;border-top:1px solid var(--line);padding-top:16px;
   font-size:12px;color:var(--ink-dim);max-width:760px}
 footer h3{font-size:12px;margin:0 0 6px;color:var(--ink)}
@@ -519,6 +534,16 @@ function updateFileStatus(){
 }
 
 function hideError(){ document.getElementById('errorbox').hidden = true; }
+function hideDimsPanel(){ document.getElementById('dimsPanel').hidden = true; }
+
+// True only when EVERY missing column is x or y - location_id/aisle/bay/level
+// are all present, so a floor plan can be built from spacing alone. If
+// anything else is missing too, this is a bigger mismatch than two numbers
+// can fix - fall through to the normal column error instead.
+function isXYOnlyMissing(err){
+  return err instanceof ColumnError && err.missing.length > 0 &&
+    err.missing.every(function(m){ return m === 'x' || m === 'y'; });
+}
 
 function describeFileError(fileLabel, err){
   if (err instanceof ColumnError){
@@ -554,6 +579,8 @@ function showError(kind, info){
       'small adapter for your export, then drop what it produces back in here.</div>';
   } else if (kind === 'read'){
     html = '<b>Could not read the file:</b> ' + escapeHtml(info.message);
+  } else if (kind === 'validation'){
+    html = '<b>' + escapeHtml(info.message) + '</b>';
   } else if (kind === 'join'){
     var shown = info.missing.slice(0, 10).map(function(s){ return escapeHtml(s); }).join(', ');
     var more = info.missing.length > 10 ? ' (+' + (info.missing.length - 10) + ' more)' : '';
@@ -594,10 +621,23 @@ function readFileText(file){
 function tryCompute(){
   var locations, orders, wh;
   try { locations = readLocations(pending.locations.text, pending.locations.name); }
-  catch (e) { showError('locations', { error: e }); return; }
+  catch (e) {
+    if (isXYOnlyMissing(e)){
+      // Everything but x/y is present - offer to build coordinates from
+      // spacing rather than send them straight to CLIENT_PROMPT.md for what
+      // might be a two-number problem.
+      hideError();
+      document.getElementById('dimsPanel').hidden = false;
+      document.getElementById('aisleSpacingInput').focus();
+      return;
+    }
+    showError('locations', { error: e });
+    return;
+  }
   try { orders = readOrders(pending.orders.text, pending.orders.name); }
   catch (e) { showError('orders', { error: e }); return; }
 
+  hideDimsPanel();
   wh = makeWarehouse(locations);
   var missing = new Set();
   orders.forEach(function(lines){
@@ -614,6 +654,52 @@ function tryCompute(){
   hideError();
   renderResults(wh, orders, results, 'Your data', pending.locations.name, pending.orders.name);
   document.getElementById('datasource').textContent = pending.locations.name + ' + ' + pending.orders.name;
+  document.getElementById('resetlink').hidden = false;
+}
+
+// The "build my floor plan from two numbers" recovery path. Re-reads the
+// already-loaded locations file tolerantly (location_id/aisle/bay/level
+// only - "A01" resolves to aisle 1 the same way readLocations() itself now
+// does), derives x/y from the spacing entered above, and runs the exact
+// same compute-and-render pipeline a normal upload does. The dims panel
+// stays open afterward on purpose: pace out one real aisle, see it does not
+// match, correct the number, click again - the map updates immediately.
+function buildFromDimensions(){
+  var spacing = parseFloat(document.getElementById('aisleSpacingInput').value);
+  var pitch = parseFloat(document.getElementById('bayPitchInput').value);
+  if (!(spacing > 0) || !(pitch > 0)){
+    showError('validation', { message: 'Enter a positive number of feet for both aisle spacing and bay pitch.' });
+    return;
+  }
+  if (!pending.locations || !pending.orders){ return; }
+
+  var coreRows;
+  try { coreRows = readLocationsCoreOnly(pending.locations.text, pending.locations.name); }
+  catch (e) { showError('locations', { error: e }); return; }
+
+  var locations = locationsMapFrom(deriveXY(coreRows, spacing, pitch));
+
+  var orders;
+  try { orders = readOrders(pending.orders.text, pending.orders.name); }
+  catch (e) { showError('orders', { error: e }); return; }
+
+  var wh = makeWarehouse(locations);
+  var missing = new Set();
+  orders.forEach(function(lines){
+    lines.forEach(function(line){ if (!locations.has(line.location_id)) { missing.add(line.location_id); } });
+  });
+  if (missing.size){
+    showError('join', { missing: Array.from(missing).sort(codePointCompare) });
+    return;
+  }
+
+  var orderIds = Array.from(orders.keys()).sort(codePointCompare);
+  var results = orderIds.map(function(id){ return optimizeOrder(wh, orders.get(id)); });
+
+  hideError();
+  renderResults(wh, orders, results, 'Your data - estimated', pending.locations.name, pending.orders.name);
+  document.getElementById('datasource').textContent = pending.locations.name + ' + ' + pending.orders.name +
+    ' (coordinates estimated: ' + spacing + ' ft aisles, ' + pitch + ' ft bays)';
   document.getElementById('resetlink').hidden = false;
 }
 
@@ -643,6 +729,9 @@ function resetToSample(e){
   pending = { locations: null, orders: null };
   updateFileStatus();
   hideError();
+  hideDimsPanel();
+  document.getElementById('aisleSpacingInput').value = '';
+  document.getElementById('bayPitchInput').value = '';
 
   var locations = readLocations(SAMPLE.locations, 'locations.csv');
   var orders = readOrders(SAMPLE.orders, 'orders.csv');
@@ -681,6 +770,12 @@ function initUpload(){
   });
   dz.addEventListener('drop', function(e){
     if (e.dataTransfer && e.dataTransfer.files.length) { handleFiles(e.dataTransfer.files); }
+  });
+
+  ['aisleSpacingInput','bayPitchInput'].forEach(function(id){
+    document.getElementById(id).addEventListener('keydown', function(e){
+      if (e.key === 'Enter') { e.preventDefault(); buildFromDimensions(); }
+    });
   });
 }
 """
@@ -821,6 +916,26 @@ close to the shortest route.</p>
     </label>
     <div class="filestatus" id="filestatus"></div>
     <div class="errorbox" id="errorbox" hidden></div>
+    <div class="dimspanel" id="dimsPanel" hidden>
+      <div class="dimsHead">Your locations file doesn't have x / y positions - normal, since a WMS
+        tracks slot labels, not physical coordinates.</div>
+      <p class="dimsNote">If your aisles are evenly spaced and numbered in physical left-to-right
+        order, build a working floor plan from two numbers instead of the full adaptation:</p>
+      <div class="dimsRow">
+        <label>Distance between aisle centers (ft)
+          <input type="number" id="aisleSpacingInput" min="0.1" step="0.1" placeholder="e.g. 12">
+        </label>
+        <label>Distance between bay centers (ft)
+          <input type="number" id="bayPitchInput" min="0.1" step="0.1" placeholder="e.g. 10">
+        </label>
+        <button type="button" id="buildDimsBtn" onclick="buildFromDimensions()">Build floor plan</button>
+      </div>
+      <p class="dimsCaveat">This assumes uniform spacing and aisle numbers running left to right, the
+        same as pacing off one aisle and multiplying. If your building has uneven aisle widths,
+        one-way aisles, multiple docks, or zones, this estimate will be wrong in ways that matter -
+        use <code>CLIENT_PROMPT.md</code> with Claude Code for those. Paced out a real aisle and got a
+        different number? Change it above and build again - the map updates instantly.</p>
+    </div>
   </div>
   <div class="caption">Currently showing: <b id="datasource">the synthetic sample data</b>.
     <a href="#" id="resetlink" onclick="resetToSample(event)" hidden>Reset to sample data</a></div>
