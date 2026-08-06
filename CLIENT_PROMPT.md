@@ -172,6 +172,18 @@ adjust the model to match what I tell you:
     order, a shape too irregular to describe as a grid — that is genuinely an interview,
     and this is where it happens: ask me the centre-to-centre distance between aisles,
     the length of a bay, and whatever else the drawing or my answers do not resolve.
+- **Letter-coded aisles or levels — this one is not self-service, and never guess at
+  it.** A real slot label like `LL13F` (two letters for the aisle, a number for how deep
+  in it, one letter for the level) is fine as-is for `location_id` — that column takes
+  any string. But if my export ALSO carries `LL` and `F` as separate aisle/level column
+  values, dashboard.html's tools cannot read them: the aisle field needs a digit
+  somewhere in it, and the level field needs to already be a number. Do not assume `LL`
+  means the 12th aisle by treating letters as base-26 digits (A=1, B=2, ... AA=27) — that
+  is a guess, it will look like it worked, and it will be silently wrong if my actual
+  aisle order does not follow that pattern (odd/even split down each side of the
+  building is common, and not alphabetical). Ask me for the real mapping — which letter
+  code is physically where, and which level letter is which height — and write the
+  adapter from what I tell you, not from an assumed alphabet order.
 - **Aisle spacing.** Are all my aisles the same distance apart? Wide bulk aisles and
   narrow case-pick aisles change the cross-aisle math.
 - **Cross-aisles.** Are there mid-building cross-overs, or only at the ends? One or more,
